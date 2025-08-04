@@ -1,0 +1,18 @@
+This directory contains the R source code used for the niche-shadow-based metapopulation simulations 
+(Figures 5, 6D, 6H, S4, S6, S7), the kick-flow simulation (Figure 7A), and the histograms
+of isolate data in Figure 7B, 7C.
+
+Contents:
+
+`niche_shadow_sim/`
+- `smallmut.rmd`: Figure 5A and 5B
+- `sigma-sweep.rmd`: Figures 5E, 5F, S6A
+- `upsilon-sweep.rmd`: Figures 5G, S6B
+- `mu-sweep.rmd`: Figures 5H, S6C
+- `2d-sweep.rmd`: Figure S7
+- `lactamase.rmd`: Figure 6D
+- `invertase.rmd`: Figure 6H
+
+`kick-flow/lifetime_sweep.rmd`: Figure 7A
+
+`isolates/isolate_data.rmd`: Figure 7B, 7C

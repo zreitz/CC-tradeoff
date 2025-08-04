@@ -1,0 +1,23 @@
+This directory contains the Rust source code used for the niche-shadow-based metapopulation simulations (Figures 5, 6D, 6H, S4, S6, S7). Three different sets of ODEs (`MODEL`s) are used: `siderophore`, `lactamase`, and `invertase`. 
+
+See the [Rust documentation](https://www.rust-lang.org/learn/get-started) for instructions to install Rust and Cargo on your system.
+
+Usage: 
+```
+cargo run --release --bin MODEL -- PARAM_FILE
+```
+
+Parameters are set with a JSON file. Test files are provided. For example:
+```
+cargo run --bin siderophore -- params_siderophore.json
+```
+
+The output will be a timestamped CSV file with the following columns:
+```
+time: round of simulation
+alpha: public goods investment of the strain
+frequency: fraction of patches occupied by the strain
+pressure: total biomass of the strain
+```
+
+The `../R/` directory contains the parameters and code used to generate figures from the CSV file.

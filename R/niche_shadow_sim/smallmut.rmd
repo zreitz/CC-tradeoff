@@ -1,0 +1,93 @@
+---
+title: "Simulation with small mutations"
+output: 
+  html_document
+---
+R code used to generate Figure 5A and 5B
+
+```{r, eval = F}
+.vsc.attach()
+setwd("r\\niche_shadow_sim")
+```
+
+```{r imports}
+library(ggplot2)
+library(cowplot)
+
+config = "rust_config.json"
+
+source("utils.R")
+```
+
+## Small kernel, visualizing initial decrease
+```{r start}
+desc <- "stdev_1e-3_initial"
+result <- paste0("results\\", desc, ".json")
+if (!file.exists(result)) {
+  writeConfig(
+    config,
+    desc,
+    mortality = 1.5,
+    mut_stdev = 1e-3,
+    mut_uniform = 0.0,
+    write_every = 1,
+    rounds = 20000
+  )
+  command <- sprintf(
+    r"[cargo run --release --bin siderophore --manifest-path ..\..\rust\Cargo.toml -- %s %s]",
+    config, result
+  )
+  code <- shell(command)
+}
+
+points <- read.csv(result, comment.char = "#")
+```
+
+```{r, fig.width = 6, fig.height = 6}
+# plt1 <- ggplot(points, aes(x = time, y = alpha, color = frequency)) +
+plt1 <- ggplot(points, aes(x = time, y = alpha)) +
+  geom_point(size = 0.3) +
+  geom_hline(yintercept = 0.0743315, linetype = "dashed") +
+  labs(
+    x = "Simulation time",
+    y = "Siderophore investment α of surviving strains",
+    color = "Patch\nOccupancy"
+  ) +
+  # scale_color_gradientn(colors = tol(23)[10:23],
+  #                       trans = "log",
+  #                       limits = c(0.0001, 1),
+  #                       breaks = c(0.0001, 0.001, 0.01, 0.1, 1),
+  #                       labels = c("0.0001", 0.001, 0.01, 0.1, 1)) +
+  coord_cartesian(xlim = c(0, 800), ylim = c(0.07, 0.25)) +
+  scale_x_continuous(expand = expansion(mult = c(0, 0.1))) +
+  theme_cowplot() +
+  theme(legend.position = "inside",
+        legend.position.inside = c(0.7, 0.8)) +
+  theme(aspect.ratio = 1, text = element_text(family = "sans"))
+
+plt1
+```
+
+zoom in on packing
+```{r, fig.width = 6, fig.height = 6}
+plt2 <- ggplot(points, aes(x = time, y = alpha)) +
+  geom_point(size = 0.3) +
+  geom_hline(yintercept = 0.0743315, linetype = "dashed") +
+  labs(
+    x = "Simulation time",
+    y = "Siderophore investment α of surviving strains",
+    color = "Patch\nOccupancy"
+  ) +
+  # scale_color_gradientn(colors = tol(23)[10:23],
+  #                       trans = "log",
+  #                       limits = c(0.0001, 1),
+  #                       breaks = c(0.0001, 0.001, 0.01, 0.1, 1),
+  #                       labels = c("0.0001", 0.001, 0.01, 0.1, 1)) +
+  coord_cartesian(xlim = c(800, 1600), ylim = c(0.074, 0.084)) +
+  scale_x_continuous(
+    expand = expansion(mult = c(0.1, 0.1))) +
+  guides(color = FALSE) +
+  theme_cowplot() +
+  theme(aspect.ratio = 1, text = element_text(family = "sans"))
+plt2
+```

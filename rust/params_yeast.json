@@ -1,0 +1,17 @@
+{
+  "description": "invertase test",
+  "rounds": 170000,
+  "write_every": 50,
+  "mortality": 0.5,
+  "max_biomass": 5.35,
+  "mut_stdev": 0.001,
+  "mut_uniform": 0.01,
+  "mut_range": [
+    0.0,
+    0.836
+  ],
+  "seed": 93117,
+  "initial": [
+    0.2
+  ]
+}

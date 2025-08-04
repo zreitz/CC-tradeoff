@@ -1,0 +1,19 @@
+# Supplementary files for "Microbial public good production in spatially structured environments is supported by a competition-colonization trade-off"
+by Zachary L. Reitz (zlreitz@gmail.com), Holly V. Moeller, and Stephen R. Proulx
+
+
+
+## Contents
+
+### mathematica/
+This directory contains Wolfram Mathematica notebooks used to perform mathematical analyses and generate Figures 2-4, 5C, 5D, 6B, 6C, 6E, 6F, S1-S5. See directory readme for more information.
+
+### r/
+
+This directory contains the R source code used for the niche-shadow-based metapopulation simulations (Figures 5, 6D, 6H, S4, S6, S7), the kick-flow simulation (Figure 7A), and the histograms of isolate data in Figure 7B, 7C. See directory readme for more information.
+
+### rust/
+This directory contains the Rust source code used for the niche-shadow-based metapopulation simulations (Figures 5, 6D, 6H, S4, S6, S7). See directory readme for more information.
+
+### rust-ode/
+This directory contains the Rust source code used for the kick-flow simulations (Figure 7a). See directory readme for more information.

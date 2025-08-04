@@ -1,0 +1,243 @@
+---
+title: "Kick-flow simulation, sweeping lifetimes"
+output: 
+  pdf_document
+---
+
+```{r, eval = F}
+.vsc.attach()
+setwd("R/kick-flow")
+```
+
+```{r imports}
+library(ggplot2)
+
+config = "rust_config.json"
+```
+
+```{r}
+writeConfig <- function(
+  path,
+  desc,
+
+  replicates = 1,
+  rounds = 1000,
+  seed = 93117,
+
+  write_every = 1,
+  print_every = 100,
+
+  pop_size = 10000,
+  inoc_size = 0.1,
+
+  mort_to_disp = 1.5,
+  patch_lifetime = 3,
+  uniform_fraction = 0
+) {
+  txt <- sprintf('{
+    "description": "%s",
+    "replicates": %i,
+    "rounds": %i,
+    "seed": %i,
+    "write_every": %i,
+    "print_every": %i,
+
+    "pop_size": %i,
+    "inoc_size": %s,
+    
+    "mort_to_disp": %s,
+    "patch_lifetime": %s,
+    "uniform_fraction": %s
+}', desc, replicates, rounds, seed,
+    write_every, print_every,
+    pop_size, inoc_size, 
+    mort_to_disp, patch_lifetime, uniform_fraction)
+  write(txt, file = path)
+}
+
+```
+
+```{r}
+survivor_plot <- function(data, min_biomass = 1, nr_reps = 3) {
+  # split by replicate
+  replicates <- split(data, data$V52)
+
+  long_dfs <- lapply(replicates[seq(nr_reps)], function(df) {
+    colnames(df) <- df[1, ]
+    df <- df[-1, 1:51]
+    points <- reshape2::melt(df, id.vars = 51)
+    colnames(points) <- c("time", "alpha", "biomass")
+
+    points$alpha <- as.numeric(as.character(points$alpha))
+    points$time <- as.numeric(points$time)
+    points[points$biomass > min_biomass, ]
+  })
+
+  for (df in long_dfs) {
+    print(ggplot(df, aes(x = time, y = alpha, color = biomass)) +
+      geom_hline(yintercept = 0.0738069, color = "lightgray", linewidth = 2) +
+      geom_point(size = 0.2) +
+      theme_bw() +
+      khroma::scale_color_YlOrBr(range = c(0.5, 1)))
+  }
+}
+```
+
+
+```{r}
+lifetimes <- c(5, 50, 500)
+prefix <- "pub_"
+
+results <- lapply(lifetimes, function(life) {
+  desc <- paste0(prefix, life)
+  result <- paste0("results/sweeps/", desc, ".csv")
+  if (!file.exists(result)) {
+    writeConfig(
+      config,
+      desc,
+      seed = 93117,
+
+      replicates = 100,
+      rounds = 20000,
+
+      write_every = 50,
+      print_every = 1000,
+
+      pop_size = 100,
+      inoc_size = 0.1,
+
+      mort_to_disp = 1.5,
+      patch_lifetime = life,
+      uniform_fraction = 0.01
+    )
+    command <- sprintf(
+      r"[cargo run --release --manifest-path ../../rust-ode/Cargo.toml --bin main -- %s %s]",
+      config, result
+    )
+    code <- system(command)
+  }
+  result
+})
+```
+
+
+### Check cutoffs
+```{r}
+for (var in lifetimes) {
+  desc <- paste0(prefix, var)
+  result <- paste0("results/sweeps/", desc, ".csv")
+  data <- read.table(result, sep = ",", comment.char = "#",
+                     header = FALSE)
+
+  survivor_plot(data, min_biomass = 10)
+}
+```
+
+### Run no-ODE version as control
+```{r}
+desc <- "pub_inf"
+result <- paste0("results/sweeps/", desc, ".csv")
+if (!file.exists(result)) {
+  writeConfig(
+    config,
+    desc,
+    seed = 93117,
+
+    replicates = 100,
+    rounds = 20000,
+
+    write_every = 50,
+    print_every = 1000,
+
+    pop_size = 100,
+    inoc_size = 0.1,
+
+    mort_to_disp = 1.5,
+    patch_lifetime = 500, # Doesn't matter
+    uniform_fraction = 0.01
+  )
+  command <- sprintf(
+    r"[cargo run --release --manifest-path ../../rust-ode/Cargo.toml --bin no-ode -- %s %s]",
+    config, result
+  )
+  code <- system(command)
+}
+result
+```
+
+### Histograms - Add infinite version
+
+```{r}
+binw <- 0.005
+
+lifetimes <- c(lifetimes, "inf")
+prefix <- "pub_"
+
+biomasses <- lapply(lifetimes, function(life) {
+  desc <- paste0(prefix, life)
+  result <- paste0("results/sweeps/", desc, ".csv")
+  data <- read.table(result, sep = ",", comment.char = "#",
+                     header = FALSE)
+
+  if (life == "inf") {
+    min_time <- 2000
+  }
+  else {
+    min_time <- 200 * as.numeric(life)
+  }
+
+  replicates <- split(data, data$V52)
+
+  biomasses <- lapply(replicates, function(df) {
+    colnames(df) <- df[1, ]
+    df <- df[-1, ]
+    colnames(df)[51] <- "time"
+    df <- df[df$time > min_time, 1:50]
+    data.frame(alpha = as.numeric(colnames(df)), biomass = colSums(df) / nrow(df))
+  })
+
+  biomasses <- data.table::rbindlist(biomasses)
+
+  biomasses$bin <- floor(biomasses$alpha / binw)
+  biomasses
+})
+
+hist_data <- lapply(biomasses, function(biomasses) {
+  hist_data <- aggregate(biomass ~ bin, biomasses, sum)
+  hist_data
+})
+names(hist_data) <- lifetimes
+
+for (data in hist_data) {
+  print(ggplot(data, aes(xmin = bin * binw, xmax = (bin + 1) * binw,
+                              ymin = 0, ymax = biomass)) +
+    geom_rect() +
+    theme_bw())
+}
+```
+
+```{r}
+combo <- rbindlist(hist_data, idcol = T)
+
+colors <- c("#ccbb44", "#ee6677", "#aa3377", "#000000")
+ggplot(combo, aes(
+    xmin = bin * binw, xmax = (bin + 1) * binw,
+    ymin = 0, ymax = biomass,
+
+    x = bin * binw, y = biomass,
+
+    fill = .id, color = .id
+  )) +
+  geom_rect(aes(alpha = .id), color = NA, show.legend = F) +
+  geom_step(linewidth = 1) +
+  scale_x_continuous(limits = c(0, 0.3)) +
+  scale_fill_manual(values = colors) +
+  scale_color_manual(values = colors) +
+  scale_alpha_manual(values = c(0.5, 0.5, 0.5, 0)) +
+  theme_bw() +
+  labs(
+    x = "Siderophore investment alpha", 
+    y = "Total biomass across simulation", 
+    color = "Expected patch\nlifetime") +
+  theme(legend.position = "inside", legend.position.inside = c(0.8, 0.8))
+```

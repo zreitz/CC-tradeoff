@@ -1,0 +1,16 @@
+{
+    "description": "multi replicate test",
+    "replicates": 10,
+    "rounds": 1000,
+    "seed": 93117,
+    "write_every": 50,
+    "print_every": 1000,
+    
+    "pop_size": 100,
+    "inoc_size": 0.1,
+
+    "mort_to_disp": 1.5,
+    "patch_lifetime": 500,
+    "uniform_fraction": 0.01
+}
+

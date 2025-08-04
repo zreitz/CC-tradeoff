@@ -1,0 +1,117 @@
+---
+title: "Lactamase model example dynamics"
+output: 
+  html_document
+---
+R code used to generate Figure 6D
+
+```{r, eval = F}
+.vsc.attach()
+setwd("r\\niche_shadow_sim")
+```
+
+```{r imports}
+library(ggplot2)
+library(cowplot)
+library(patchwork)
+library(data.table)
+library(TAM) # weighted_quantile
+library(spatstat) # CDF
+library(ggridges)
+library(gghalves)
+
+config = "rust_config.json"
+
+source("utils.R")
+```
+
+```{r}
+writeConfig <- function(
+  path,
+  desc,
+
+  mortality = 1.5,
+  mut_stdev = 5e-4,
+  mut_uniform = 0.05,
+
+  write_every = 10,
+  rounds = 1000000,
+  initial = 0.227
+) {
+  txt <- sprintf('{
+  "description": "%s",
+  "rounds": %i,
+  "write_every": %i,
+  "mortality": %s,
+  "max_biomass": 4.85915,
+  "mut_stdev": %s,
+  "mut_uniform": %s,
+  "mut_range": [
+    0.0,
+    0.836
+  ],
+  "seed": 93117,
+  "initial": [
+    %s
+  ]
+}', desc, rounds, write_every, mortality, mut_stdev, mut_uniform, initial)
+  write(txt, file = path)
+}
+```
+
+## 
+```{r start}
+result <- "results/lactamase_example_0.9.json"
+if (!file.exists(result)) {
+  writeConfig(
+    config,
+    result,
+    mortality = 0.9,
+    mut_stdev = 1,
+    mut_uniform = 0,
+    write_every = 50,
+    rounds = 170000,
+    initial = 0.2
+  )
+  command <- sprintf(
+    r"[cargo run --release --bin lactamase --manifest-path ..\..\rust\Cargo.toml -- %s %s]",
+    config, result
+  )
+  code <- shell(command)
+}
+
+
+points <- read.csv(result, comment.char = "#")
+```
+
+
+
+```{r, fig.width = 3, fig.height = 5}
+lims = c(50000, 60000)
+plt_points <- points[points$time > lims[1] * 0.9 & points$time < lims[2] * 1.1, ]
+plt <- ggplot(plt_points, aes(x = time, y = alpha)) +
+  #geom_hline(yintercept = 0.0738069, linetype = "dashed") +
+  geom_point(size = 0.4, show.legend = F, color = "black") +
+  # geom_hline(yintercept = 0.0743315, linetype = "dashed") +
+  # geom_hline(yintercept = 0.226797, linetype = "dashed") +
+  labs(
+    x = "Simulation time",
+    y = "β-Lactamase investment α"
+  ) +
+  scale_x_continuous(
+    limits = c(lims[1] - 1000, lims[2] + 1000),
+    expand = c(0,0),
+    breaks = lims,
+    labels = sprintf("%sK", round(lims/1000, 1))
+    ) +
+  scale_y_continuous(
+    limits = c(0, 0.40),
+    expand = c(0,0)
+  ) +
+  theme_bw(base_size = 12) +
+  theme(
+    aspect.ratio = 1.7
+  )
+
+plt
+```

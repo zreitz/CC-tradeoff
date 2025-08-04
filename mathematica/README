@@ -1,0 +1,22 @@
+This directory contains Wolfram Mathematica notebooks 
+(compiled in version 14.0 on Windows 11) used to perform 
+analyses and generate figures.
+
+Contents are as follows:
+
+1-in-patch-model.nb
+* The in-patch model and its analytical and numerical solutions
+* Code to generate Figures 2, 4, S1-S3, and S5
+* The Jacobian stability analysis for Supplemental Discussion 1
+
+2-metapopulation-model.nb
+* Code to generate metapopulation dynamics in Figure 3A
+* Code to generate niche shadow plots in Figures 3B, 5C and D, S4
+
+SI-lactamase-model.nb
+* In-patch model, analysis, and figures used for Supplemental discussion 3: "A model of β-lactamase production exhibits a competition-colonization trade-off"
+* Code to generate Figure 6B, 6C
+
+SI-invertase-model.nb
+* In-patch model, analysis, and figures used for Supplemental discussion 3: "A model of invertase production in yeast exhibits a competition-colonization trade-off"
+* Code to generate Figure 6E, 6F
