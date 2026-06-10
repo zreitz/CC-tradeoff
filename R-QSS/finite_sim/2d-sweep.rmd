@@ -1,0 +1,83 @@
+---
+title: "2D sweep of sigma and upsilon"
+output: 
+  html_document
+---
+R code used to generate Figure S7
+
+```{r, eval = F}
+.vsc.attach()
+setwd("r\\niche_shadow_sim")
+```
+
+```{r imports}
+library(ggplot2)
+library(TAM) # weighted_quantile
+
+source("utils.R")
+```
+
+
+```{r setup}
+config = "rust_config.json"
+values = 10^seq(from = -5, to = 0, by = 0.25)
+run_rust <- function(stdev, unif) {
+  desc <- sprintf("stdev_%s_unif_%s", signif(stdev, 2), signif(unif, 2))
+  result <- paste0("results\\2d\\", desc, ".json")
+  if (!file.exists(result)) {
+    writeConfig(
+      config,
+      desc,
+      mortality = 1.5,
+      mut_stdev = stdev,
+      mut_uniform = unif,
+      write_every = 10000,
+      rounds = 1e7,
+      initial = 0.075
+    )
+    command <- sprintf(
+      r"[cargo run --release --bin siderophore --manifest-path ..\..\rust\Cargo.toml -- %s %s]",
+      config, result
+    )
+    code <- shell(command)
+  }
+  result
+}
+
+results <- expand.grid(stdev = values, unif = values)
+results$file <- Vectorize(run_rust)(results$stdev, results$unif)
+```
+
+```{r median}
+get_median <- function(file) {
+  points <- read.csv(file, comment.char = "#")
+  points <- points[points$time > 1000000, ]
+  weighted_quantile(points$alpha, w=points$pressure, probs = 0.5)
+}
+
+results$median <- Vectorize(get_median)(results$file)
+```
+
+```{r, fig.height = 6, fig.width = 6}
+ggplot(results, aes(x = stdev, y = unif, fill = median)) +
+  geom_tile(color = "gray") +
+  scale_x_log10(breaks = 10^seq(-5, 0)) + 
+  scale_y_log10(breaks = 10^seq(-5, 0)) +
+  coord_cartesian(expand = F) +
+  labs(
+    x = "Mutation standard deviation σ",
+    y = "Fraction of mutants from uniform distribution υ",
+    fill = "Median siderophore\ninvestment α"
+  ) +
+  theme_bw() +
+  scale_fill_gradientn(colors = color("YlOrBr")(9),
+                       limits = c(0.07, 0.19),
+                       values = c(0, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.7, 1),
+                       breaks = c(0.075, 0.125, 0.175)
+  )+
+  theme(
+    legend.position = "top",
+    aspect.ratio = 1
+    )
+```
+

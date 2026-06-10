@@ -1,0 +1,21 @@
+{
+  "description": "smallmut_0.005_start0.01",
+  "replicates": 1,
+  "rounds": 1000000,
+  "write_every": 100,
+  "seed": 93117,
+  "pop_size": 10000,
+  "patch_lifetime": 10000,
+  "mort_to_disp": 24.1225,
+  "uniform_fraction": 0,
+  "max_biomass": 121.012,
+  "mut_prob": 0.0001,
+  "mut_stdev": 0.005,
+  "mut_range": [0, 1],
+  "initial": [
+    {
+      "alpha": 0.01,
+      "patches": 10000
+    }
+  ]
+}

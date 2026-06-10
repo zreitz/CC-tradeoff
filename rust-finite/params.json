@@ -1,0 +1,21 @@
+{
+    "description": "test run",
+    "replicates": 1,
+    "rounds": 1000000,
+    "write_every": 1000,
+    "seed": 93117,
+
+    "pop_size": 10000,
+    "patch_lifetime": 10000,
+    "mort_to_disp": 2.0,
+    "uniform_fraction": 0,
+
+    "max_biomass": 15.0,
+    "mut_prob": 1e-4,
+    "mut_stdev": 0.01,
+    "mut_range": [0, 0.85],
+
+    "initial": [
+        {"alpha": 0.02, "patches": 1000}
+    ]
+}

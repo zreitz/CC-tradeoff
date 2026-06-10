@@ -15,6 +15,10 @@ path = "src/invertase.rs"
 name = "siderophore"
 path = "src/siderophore.rs"
 
+[[bin]]
+name = "siderophoreQSS"
+path = "src/siderophoreQSS.rs"
+
 [lib]
 name = "lib"
 path = "src/lib.rs"

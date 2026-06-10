@@ -1,0 +1,206 @@
+---
+title: "Simulation with small mutations"
+output: 
+  html_document
+---
+R code used to generate Figure 5A and 5B
+
+```{r, eval = F}
+.vsc.attach()
+setwd("R-QSS/finite_sim")
+```
+
+```{r imports}
+library(ggplot2)
+library(cowplot)
+library(khroma)
+
+config = "rust_config.json"
+
+source("utils.R")
+```
+
+
+```{r start}
+desc <- "smallmut_0.001_start0.01"
+result <- paste0("results/", desc, ".json")
+if (!file.exists(result)) {
+  writeConfig(
+    config,
+    desc,
+    replicates = 1,
+    rounds = 1000000,
+    write_every = 100,
+    seed = 93117,
+    pop_size = 100000,
+    patch_lifetime = 10000,
+    mort_to_disp = 24.1225,
+    uniform_fraction = 0,
+    max_biomass = 121.012,
+    mut_prob = 1e-4,
+    mut_stdev = 0.001,
+    mut_range = c(0, 1),
+    initial = list(
+      list(alpha = 0.01, patches = 10000))
+  )
+  command <- sprintf(
+    r"[cargo run --release --manifest-path ../../rust-finite/Cargo.toml -- %s %s]",
+    config, result
+  )
+  code <- system(command)
+}
+
+points <- read.csv(result, comment.char = "#")
+```
+
+```{r, fig.width = 6, fig.height = 6}
+points <- read.csv(result, comment.char = "#")
+points <- tail(points, 100000)
+
+tol = khroma::color("iridescent")
+
+plt1 <- ggplot(points, aes(x = time, y = alpha, color = patch_count)) +
+#plt1 <- ggplot(points, aes(x = time, y = alpha)) +
+  geom_point(size = 0.2) +
+  labs(
+    x = "Simulation time",
+    y = "Siderophore investment α of surviving strains",
+    color = "Patch\nOccupancy"
+  ) +
+  scale_color_gradientn(colors = tol(23)[10:23],
+                        trans = "log",
+                        limits = c(1, 10000),
+                        breaks = c(1, 10, 100, 1000, 10000)) +
+  coord_cartesian(ylim = c(0, 0.1)) +
+  #scale_x_continuous(expand = expansion(mult = c(0, 0.1))) +
+  theme_bw() +
+  theme(legend.position = "inside",
+        legend.position.inside = c(0.7, 0.8)) +
+  theme(aspect.ratio = 1, text = element_text(family = "sans"))
+
+plt1
+```
+
+
+
+```{r start}
+desc <- "smallmut_0.01_start0.01"
+result <- paste0("results/", desc, ".json")
+if (!file.exists(result)) {
+  writeConfig(
+    config,
+    desc,
+    replicates = 1,
+    rounds = 1000000,
+    write_every = 100,
+    seed = 93117,
+    pop_size = 10000,
+    patch_lifetime = 10000,
+    mort_to_disp = 24.1225,
+    uniform_fraction = 0,
+    max_biomass = 121.012,
+    mut_prob = 1e-4,
+    mut_stdev = 0.01,
+    mut_range = c(0, 1),
+    initial = list(
+      list(alpha = 0.01, patches = 10000))
+  )
+  command <- sprintf(
+    r"[cargo run --release --manifest-path ../../rust-finite/Cargo.toml -- %s %s]",
+    config, result
+  )
+  code <- system(command)
+}
+
+points <- read.csv(result, comment.char = "#")
+```
+
+```{r, fig.width = 6, fig.height = 6}
+points <- read.csv(result, comment.char = "#")
+points <- tail(points, 100000)
+
+tol = khroma::color("iridescent")
+
+plt1 <- ggplot(points, aes(x = time, y = alpha, color = patch_count)) +
+#plt1 <- ggplot(points, aes(x = time, y = alpha)) +
+  geom_point(size = 0.2) +
+  labs(
+    x = "Simulation time",
+    y = "Siderophore investment α of surviving strains",
+    color = "Patch\nOccupancy"
+  ) +
+  scale_color_gradientn(colors = tol(23)[10:23],
+                        trans = "log",
+                        limits = c(1, 10000),
+                        breaks = c(1, 10, 100, 1000, 10000)) +
+  coord_cartesian(ylim = c(0, 0.1)) +
+  #scale_x_continuous(expand = expansion(mult = c(0, 0.1))) +
+  theme_bw() +
+  theme(legend.position = "inside",
+        legend.position.inside = c(0.7, 0.8)) +
+  theme(aspect.ratio = 1, text = element_text(family = "sans"))
+
+plt1
+```
+
+
+
+```{r start}
+desc <- "smallmut_0.005_start0.01"
+result <- paste0("results/", desc, ".json")
+if (!file.exists(result)) {
+  writeConfig(
+    config,
+    desc,
+    replicates = 1,
+    rounds = 1000000,
+    write_every = 100,
+    seed = 93117,
+    pop_size = 10000,
+    patch_lifetime = 10000,
+    mort_to_disp = 24.1225,
+    uniform_fraction = 0,
+    max_biomass = 121.012,
+    mut_prob = 1e-4,
+    mut_stdev = 0.005,
+    mut_range = c(0, 1),
+    initial = list(
+      list(alpha = 0.01, patches = 10000))
+  )
+  command <- sprintf(
+    r"[cargo run --release --manifest-path ../../rust-finite/Cargo.toml -- %s %s]",
+    config, result
+  )
+  code <- system(command)
+}
+
+points <- read.csv(result, comment.char = "#")
+```
+
+```{r, fig.width = 6, fig.height = 6}
+points <- read.csv(result, comment.char = "#")
+points <- tail(points, 100000)
+
+tol = khroma::color("iridescent")
+
+plt1 <- ggplot(points, aes(x = time, y = alpha, color = patch_count)) +
+#plt1 <- ggplot(points, aes(x = time, y = alpha)) +
+  geom_point(size = 0.2) +
+  labs(
+    x = "Simulation time",
+    y = "Siderophore investment α of surviving strains",
+    color = "Patch\nOccupancy"
+  ) +
+  scale_color_gradientn(colors = tol(23)[10:23],
+                        trans = "log",
+                        limits = c(1, 10000),
+                        breaks = c(1, 10, 100, 1000, 10000)) +
+  coord_cartesian(ylim = c(0, 0.1)) +
+  #scale_x_continuous(expand = expansion(mult = c(0, 0.1))) +
+  theme_bw() +
+  theme(legend.position = "inside",
+        legend.position.inside = c(0.7, 0.8)) +
+  theme(aspect.ratio = 1, text = element_text(family = "sans"))
+
+plt1
+```

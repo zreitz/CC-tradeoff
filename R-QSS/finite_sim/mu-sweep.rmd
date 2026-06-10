@@ -1,0 +1,266 @@
+---
+title: "Sweep of mortality rate mu"
+output: 
+  html_document
+---
+R code used to generate Figures 5H, S6C
+
+```{r, eval = F}
+.vsc.attach()
+setwd("r\\niche_shadow_sim")
+```
+
+```{r imports}
+library(ggplot2)
+library(cowplot)
+library(patchwork)
+library(data.table)
+library(TAM) # weighted_quantile
+library(spatstat) # CDF
+library(ggridges)
+library(gghalves)
+
+config = "rust_config.json"
+
+source("utils.R")
+```
+
+```{r setup}
+config = "rust_config.json" 
+vars <- c(0.3, 0.5, 3, 5)
+results <- lapply(vars, function(var) {
+  desc <- sprintf("vary_mort_%s__unif_0.01_stdev_0.001", var)
+  result <- paste0("results\\mort_sweep\\", desc, ".json")
+  if (!file.exists(result)) {
+    writeConfig(
+    config,
+    desc,
+    mortality = var,
+    mut_stdev = 1e-3,
+    mut_uniform = 1e-2,
+    write_every = 50,
+    rounds = 170000,
+    initial = 0.227
+  )
+  command <- sprintf(
+    r"[cargo run --release --bin siderophore --manifest-path ..\..\rust\Cargo.toml -- %s %s]",
+    config, result
+  )
+  code <- shell(command)
+  }
+  result
+})
+print(results)
+```
+
+
+
+## Examples
+```{r examples, fig.width = 8, fig.height = 3}
+print(vars)
+plts <- lapply(results, function(x) {
+  points <- read.csv(x, comment.char = "#")
+  comparePlot(points, lims = c(150000, 160000)) 
+})
+
+plts <- lapply(seq_along(vars), function(i) {
+  plt <- plts[[i]] + labs(subtitle = paste0("μ = ", vars[i], " (σ = 0.001)"))
+  plt
+}) 
+
+plts[[1]] <- plts[[1]] + scale_y_continuous(
+      name = "Siderophore investment α",
+      limits = c(0.05, 0.6),
+      expand = c(0,0),
+      breaks = c(0.1, 0.3, 0.5))
+
+ 
+plts <- wrap_plots(plts, nrow = 1)
+
+axis_title <- ggplot(data.frame(x = c(0, 1)), aes(x = x)) + geom_blank() +
+  theme_void(base_size = 12) + 
+  theme(axis.title.x = element_text()) + 
+  labs(x = "Simulation time")   
+
+plt <- plts / axis_title + plot_layout(heights = c(40, 1))
+
+plt
+```
+
+
+## Longer run for density plot
+
+
+```{r setup2}
+vars <- c(0.3, 0.5, 3, 5) 
+results <- lapply(vars, function(var) {
+  desc <- sprintf("vary_mort_%s__unif_0.01_stdev_0.001", var)
+  result <- paste0("results\\mort_sweep_long\\", desc, ".json")
+  if (!file.exists(result)) {
+    writeConfig(
+    config,
+    desc,
+    mortality = var,
+    mut_stdev = 1e-3,
+    mut_uniform = 1e-2,
+    write_every = 500,
+    rounds = 10000000,
+    initial = 0.227
+  )
+  command <- sprintf(
+    r"[cargo run --release --bin siderophore --manifest-path ..\..\rust\Cargo.toml -- %s %s]",
+    config, result
+  )
+  code <- shell(command)
+  }
+  result
+})
+```
+
+
+```{r}
+pointslist <- lapply(results, read.csv, comment.char = "#")
+names(pointslist) <- vars
+
+squashed <- rbindlist(pointslist, idcol = "var")
+squashed <- squashed[squashed$time > 100000,]
+```
+
+### boxplots
+```{r quant}
+quantiles <- lapply(pointslist, function(x) {
+  x <- x[x$time > 100000,]
+  weighted_quantile(x$alpha, w=x$pressure)
+})
+quantiles <- do.call(rbind, quantiles)
+
+quant_df <- data.frame(quantiles)
+colnames(quant_df) <- c("ymin", "lower", "middle", "upper", "ymax")
+quant_df$var <- rownames(quant_df)
+```
+
+
+```{r, fig.height = 5, fig.width = 4}
+ggplot(quant_df, aes(x=factor(var, levels = vars))) +
+  geom_hline(yintercept = 0.0743315, linetype = "dashed") +
+  geom_boxplot(width = 0.7,
+               stat = "identity", aes(ymin = ymin, 
+               lower = lower, middle = middle,
+               upper = upper, ymax = ymax)) +
+  geom_label(aes(label = round(ymax, 3), y = pmin(ymax, 0.6)),
+             size = 3, parse = FALSE, label.size = 0, nudge_y = 0.005) +
+
+  xlab("Mortality rate μ") +
+  ylab("Siderophore investment α") +
+  coord_cartesian(ylim = c(0.07, 0.6)) +
+  theme_bw() +
+  theme(aspect.ratio = 1.8)
+```
+
+
+```{r}
+ggplot(squashed, aes(y = alpha, weight = pressure,
+                     group = factor(var, levels = vars), 
+                     color = factor(var, levels = vars))) +
+  geom_freqpoly(binwidth = 0.005, linewidth = 1.2) +
+  coord_cartesian(ylim = c(0.07, 0.6), expand = F) +
+  theme_bw() +
+  labs(
+    x = "Frequency", 
+    y = "Siderophore investment α", 
+    color = "Mortality rate μ") +
+  theme(
+    aspect.ratio = 1.8,
+    legend.position = "inside",
+    legend.position.inside = c(0.7, 0.7)
+  )
+```
+
+```{r}
+ggplot(squashed, aes(y = alpha, weight = pressure,
+                     group = factor(var, levels = vars), 
+                     color = factor(var, levels = vars))) +
+  geom_density(bw = 0.0001, linewidth = 1.2,
+               bounds = c(0.0738069, 0.822162)) +
+  coord_cartesian(ylim = c(0.07, 0.6), expand = F) +
+  theme_bw() +
+  labs(
+    x = "Frequency", 
+    y = "Siderophore investment α", 
+    color = "Mortality rate μ") +
+  theme(aspect.ratio = 1.8,
+        legend.position = "inside",
+        legend.position.inside = c(0.7, 0.7)
+  )
+```
+
+
+```{r}
+densities <- lapply(seq_along(pointslist), function(i) {
+  points <- pointslist[[i]]
+  points <- points[points$time > 100000, ]
+  d <- density(points$alpha, weights = points$pressure)
+  CDF(d)
+  #data.frame(group = names(pointslist)[i], x = d$x, y = d$y)
+})
+
+ggplot() +
+  xlim(0.0738069, 0.7) +
+  lapply(seq_along(densities), function(i) {
+    geom_function(
+      fun = densities[[i]],
+      linewidth = 1.2
+    )
+  }) +
+  theme_bw() +
+  labs(
+    x = "Siderophore investment α",
+    y = "Cumulative density",
+    color = "Mortality rate μ") +
+  theme(aspect.ratio = 1.8,
+        legend.position = "inside",
+        legend.position.inside = c(0.6, 0.35))
+```
+
+
+```{r dist}
+densities <- lapply(seq_along(pointslist), function(i) {
+  points <- pointslist[[i]]
+  points <- points[points$time > 100000, ]
+  d <- density(points$alpha, weights = points$pressure / sum(points$pressure), 
+               bw = 0.002, cut = 0)
+  df <- data.frame(var = factor(names(pointslist)[i], levels = vars), 
+             alpha = d$x, mass = d$y)
+  df[df$alpha <= max(points$alpha),]
+})
+squashed_dens <- rbindlist(densities) 
+squashed_dens$mass <- squashed_dens$mass / max(squashed_dens$mass)
+
+dist_plt <- ggplot(squashed_dens, aes(
+          y = alpha, width = mass,
+          x = var,
+          group = var
+          )) +
+  geom_hline(yintercept = 0.0743315, linetype = "dashed") +        
+  geom_boxplot(data = quant_df,
+               inherit.aes = FALSE,
+               width = 0.1,
+               position = position_nudge(x = -0.05),
+               stat = "identity", aes(x = var,
+                ymin = ymin, 
+                lower = lower, middle = middle,
+                upper = upper, ymax = pmin(ymax, 0.57))) +
+  geom_vridgeline(scale = 0.9, min_width = 0,
+                  fill = "#cccccc") +
+  scale_y_continuous(limits = c(0.05, 0.61), expand = c(0,0),
+      breaks = c(0.1, 0.3, 0.5)) +
+  theme_bw(base_size = 12) +
+  guides(fill="none") +
+  labs(
+    x = "Mortality rate μ", 
+    y = NULL) +
+  theme(aspect.ratio = 0.7)
+
+dist_plt
+
+```
