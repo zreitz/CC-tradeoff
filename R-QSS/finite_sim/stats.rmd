@@ -1,0 +1,979 @@
+---
+title: "Long term statistics"
+output: 
+  html_document
+---
+R code used to generate Figure XXXX
+
+```{r, eval = F}
+.vsc.attach()
+setwd("R-QSS/finite_sim")
+```
+
+```{r imports}
+library(ggplot2)
+library(cowplot)
+library(khroma)
+
+config = "rust_config.json"
+
+source("utils.R")
+```
+
+## sigma = 0.01, N = 1e3, theta = 1e-3 
+```{r start}
+n = 3
+sigma = -2
+theta = -3
+desc <- paste0("N_E", n, "_sigma_E", sigma, "_theta_E", theta)
+result <- paste0("results/comp", desc, ".csv")
+if (!file.exists(result)) {
+  writeConfig(
+    config,
+    desc,
+    replicates = 1,
+    rounds = 1e7,
+    write_every = 100,
+    seed = 93117,
+    pop_size = 10^n,
+    patch_lifetime = 10000,
+    mort_to_disp = 24.1225,
+    uniform_fraction = 0,
+    max_biomass = 121.012,
+    mut_prob = 10^theta,
+    mut_stdev = 10^sigma,
+    mut_range = c(0, 1),
+    initial = list(
+      list(alpha = 0.109, patches = 900)
+      )
+  )
+  command <- sprintf(
+    r"[cargo run --release --manifest-path ../../rust-finite/Cargo.toml -- %s %s]",
+    config, result
+  )
+  code <- system(command)
+}
+
+points <- read.csv(result, comment.char = "#")
+
+every10000rounds <- subset(points, round %% 10000 == 0)
+```
+
+
+```{r, fig.width = 6, fig.height = 6}
+tol = khroma::color("iridescent")
+
+plt1 <- ggplot(every10000rounds, aes(x = time, y = alpha, color = patch_count)) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "#555555") +
+  geom_hline(yintercept = 0.109, linetype = "dashed", color = "#555555") +
+  geom_point(size = 0.001, stroke = 0.5) +
+  labs(
+    x = "Simulation time",
+    y = "Siderophore investment α",
+    color = "Occupied patches"
+  ) +
+  scale_color_gradientn(colors = tol(23)[10:23],
+                        trans = "log",
+                        limits = c(1, 1000),
+                        breaks = c(1, 10, 100, 1000)) +
+  coord_cartesian( ylim = c(0, 0.11)) +
+  scale_x_continuous(expand = expansion(mult = c(0.05, 0.05))) +
+  theme_bw() +
+  theme(legend.position = "inside") +
+  theme(
+    aspect.ratio = 1, 
+    text = element_text(family = "sans"), 
+    legend.position.inside = c(0.7, 0.75),
+    legend.key.height  = unit(10, "pt"),
+    legend.background = element_blank()
+    )
+
+plt1
+```
+
+
+
+
+```{r}
+# Calculate total siderophore production
+production <- aggregate(alpha * biomass ~ time, data = every10000rounds, FUN = sum)
+names(production) <- c("time", "total_sid")
+production$total_sid <- production$total_sid / n
+
+plt2 <- ggplot(production, aes(x = time, y = total_sid)) +
+  geom_point(size = 0.01) +
+  labs(
+    x = "Simulation time",
+    y = "Per-patch siderophore production"
+  ) +
+  theme_bw() +
+  scale_y_log10() +
+  theme(legend.position = "inside",
+        legend.position.inside = c(0.7, 0.8)) +
+  theme(aspect.ratio = 1, text = element_text(family = "sans"))
+plt2
+```
+
+
+```{r}
+# Calculate total biomass
+biomass <- aggregate(biomass ~ time, data = every10000rounds, FUN = sum)
+names(biomass) <- c("time", "total")
+
+plt3 <- ggplot(biomass, aes(x = time, y = total)) +
+  geom_point(size = 0.01) +
+  labs(
+    x = "Simulation time",
+    y = "Total system biomass"
+  ) +
+  theme_bw() +
+  scale_y_log10() +
+  theme(legend.position = "inside",
+        legend.position.inside = c(0.7, 0.8)) +
+  theme(aspect.ratio = 1, text = element_text(family = "sans"))
+
+plt3
+```
+
+```{r}
+# Calculate total occupancy
+occupancy <- aggregate(patch_count ~ time, data = every10000rounds, FUN = sum)
+names(occupancy) <- c("time", "total")
+
+plt4 <- ggplot(occupancy, aes(x = time, y = total)) +
+  geom_point(size = 0.01) +
+  labs(
+    x = "Simulation time",
+    y = "Total patch occupancy"
+  ) +
+  theme_bw() +
+  theme(legend.position = "inside",
+        legend.position.inside = c(0.7, 0.8)) +
+  theme(aspect.ratio = 1, text = element_text(family = "sans"))
+
+plt4
+```
+
+
+```{r}
+# Calculate number of strains
+strainnr <- as.data.frame(table(every10000rounds$time))
+names(strainnr) <- c("time", "total")
+strainnr$time <- as.numeric(as.character(strainnr$time))
+
+plt5 <- ggplot(strainnr, aes(x = time, y = total)) +
+  geom_point(size = 0.01) +
+  labs(
+    x = "Simulation time",
+    y = "Number of coexisting strains"
+  ) +
+  scale_y_continuous(limits = c(0, 15)) +
+  theme_bw() +
+  theme(legend.position = "inside",
+        legend.position.inside = c(0.7, 0.8)) +
+  theme(aspect.ratio = 1, text = element_text(family = "sans"))
+
+plt5
+```
+
+```{r}
+# Calculate number of strains >10 patches
+abundant <- subset(every10000rounds, patch_count >= 10)
+strainnr <- as.data.frame(table(abundant$time))
+names(strainnr) <- c("time", "total")
+strainnr$time <- as.numeric(as.character(strainnr$time))
+
+plt5 <- ggplot(strainnr, aes(x = time, y = total)) +
+  geom_point(size = 0.01) +
+  labs(
+    x = "Simulation time",
+    y = "# of strains in >1% of patches"
+  ) +
+  theme_bw() +
+  scale_y_continuous(limits = c(0, 12), breaks = c(0, 2, 4, 6, 8, 10, 12)) +
+  theme(legend.position = "inside",
+        legend.position.inside = c(0.7, 0.8)) +
+  theme(aspect.ratio = 1, text = element_text(family = "sans"))
+
+plt5
+```
+
+```{r}
+# Histogram of alpha
+plt6 <- ggplot(subset(every10000rounds, time > 0), aes(x = alpha, weight = biomass)) +
+  geom_vline(xintercept=0.109, linetype = "dashed") +
+  geom_histogram(aes(y = after_stat(count / sum(count))), binwidth=0.002) +
+  theme_bw() +
+  labs(
+    x = "Siderophore investment α",
+    y = "Biomass density"
+  ) +
+  coord_cartesian( xlim = c(0, 0.11)) +
+  theme(
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank()
+  )
+
+plt6
+```
+
+Assemble SI figure
+```{r}
+plot_list <- list(plt1, plt2, plt3, plt4, plt5, plt6)
+
+plot <- plot_grid( # cowplot
+  plotlist = plot_list,
+  ncol = 2,
+  nrow = 3,
+  align = "hv",
+  labels = c("A", "B", "C", "D", "E", "F"),
+  label_size = 12,
+  label_fontface = "bold",
+  label_fontfamily = "sans"
+)
+
+save_plot(
+  filename = "results/stats_1e-2.png", 
+  plot = plot,
+  base_height = 10,
+  base_width = 7, 
+  dpi = 300,
+)
+```
+
+
+
+
+## sigma = 0.01, N = 1e4, theta = 1e-5 
+```{r start}
+n = 4
+sigma = -2
+theta = -3
+desc <- paste0("N_E", n, "_sigma_E", sigma, "_theta_E", theta)
+result <- paste0("results/stats_", desc, ".csv")
+if (!file.exists(result)) {
+  writeConfig(
+    config,
+    desc,
+    replicates = 1,
+    rounds = 1e6,
+    write_every = 100,
+    seed = 93117,
+    pop_size = 10^n,
+    patch_lifetime = 10000,
+    mort_to_disp = 24.1225,
+    uniform_fraction = 0,
+    max_biomass = 121.012,
+    mut_prob = 10^theta,
+    mut_stdev = 10^sigma,
+    mut_range = c(0, 1),
+    initial = list(
+      list(alpha = 0.109, patches = 900)
+      )
+  )
+  command <- sprintf(
+    r"[cargo run --release --manifest-path ../../rust-finite/Cargo.toml -- %s %s]",
+    config, result
+  )
+  code <- system(command)
+}
+
+points <- read.csv(result, comment.char = "#")
+
+every10000rounds <- subset(points, round %% 10000 == 0)
+```
+
+
+```{r, fig.width = 6, fig.height = 6}
+tol = khroma::color("iridescent")
+
+plt1 <- ggplot(every10000rounds, aes(x = time, y = alpha, color = patch_count)) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "#555555") +
+  geom_hline(yintercept = 0.109, linetype = "dashed", color = "#555555") +
+  geom_point(size = 0.001, stroke = 0.5) +
+  labs(
+    x = "Simulation time",
+    y = "Siderophore investment α",
+    color = "Occupied patches"
+  ) +
+  scale_color_gradientn(colors = tol(23)[10:23],
+                        trans = "log",
+                        limits = c(1, 1000),
+                        breaks = c(1, 10, 100, 1000)) +
+  coord_cartesian( ylim = c(0, 0.11)) +
+  scale_x_continuous(expand = expansion(mult = c(0.05, 0.05))) +
+  theme_bw() +
+  theme(legend.position = "inside") +
+  theme(
+    aspect.ratio = 1, 
+    text = element_text(family = "sans"), 
+    legend.position.inside = c(0.7, 0.75),
+    legend.key.height  = unit(10, "pt"),
+    legend.background = element_blank()
+    )
+
+plt1
+```
+
+
+
+
+```{r}
+# Calculate total siderophore production
+production <- aggregate(alpha * biomass ~ time, data = every10000rounds, FUN = sum)
+names(production) <- c("time", "total_sid")
+production$total_sid <- production$total_sid / n
+
+plt2 <- ggplot(production, aes(x = time, y = total_sid)) +
+  geom_point(size = 0.01) +
+  labs(
+    x = "Simulation time",
+    y = "Per-patch siderophore production"
+  ) +
+  theme_bw() +
+  scale_y_log10() +
+  theme(legend.position = "inside",
+        legend.position.inside = c(0.7, 0.8)) +
+  theme(aspect.ratio = 1, text = element_text(family = "sans"))
+plt2
+```
+
+
+```{r}
+# Calculate total biomass
+biomass <- aggregate(biomass ~ time, data = every10000rounds, FUN = sum)
+names(biomass) <- c("time", "total")
+
+plt3 <- ggplot(biomass, aes(x = time, y = total)) +
+  geom_point(size = 0.01) +
+  labs(
+    x = "Simulation time",
+    y = "Total system biomass"
+  ) +
+  theme_bw() +
+  theme(legend.position = "inside",
+        legend.position.inside = c(0.7, 0.8)) +
+  theme(aspect.ratio = 1, text = element_text(family = "sans"))
+
+plt3
+```
+
+```{r}
+# Calculate total occupancy
+occupancy <- aggregate(patch_count ~ time, data = every10000rounds, FUN = sum)
+names(occupancy) <- c("time", "total")
+
+plt4 <- ggplot(occupancy, aes(x = time, y = total)) +
+  geom_point(size = 0.01) +
+  labs(
+    x = "Simulation time",
+    y = "Total patch occupancy"
+  ) +
+  theme_bw() +
+  theme(legend.position = "inside",
+        legend.position.inside = c(0.7, 0.8)) +
+  theme(aspect.ratio = 1, text = element_text(family = "sans"))
+
+plt4
+```
+
+
+```{r}
+# Calculate number of strains
+strainnr <- as.data.frame(table(every10000rounds$time))
+names(strainnr) <- c("time", "total")
+strainnr$time <- as.numeric(as.character(strainnr$time))
+
+plt5 <- ggplot(strainnr, aes(x = time, y = total)) +
+  geom_point(size = 0.01) +
+  labs(
+    x = "Simulation time",
+    y = "Number of coexisting strains"
+  ) +
+  scale_y_continuous(limits = c(0, 15)) +
+  theme_bw() +
+  theme(legend.position = "inside",
+        legend.position.inside = c(0.7, 0.8)) +
+  theme(aspect.ratio = 1, text = element_text(family = "sans"))
+
+plt5
+```
+
+```{r}
+# Calculate number of strains >10 patches
+abundant <- subset(every10000rounds, patch_count >= n * 0.01)
+strainnr <- as.data.frame(table(abundant$time))
+names(strainnr) <- c("time", "total")
+strainnr$time <- as.numeric(as.character(strainnr$time))
+
+plt5 <- ggplot(strainnr, aes(x = time, y = total)) +
+  geom_point(size = 0.01) +
+  labs(
+    x = "Simulation time",
+    y = "# of strains in >1% of patches"
+  ) +
+  theme_bw() +
+  theme(legend.position = "inside",
+        legend.position.inside = c(0.7, 0.8)) +
+  theme(aspect.ratio = 1, text = element_text(family = "sans"))
+
+plt5
+```
+
+```{r}
+# Histogram of alpha
+plt6 <- ggplot(subset(every10000rounds, time > 0), aes(x = alpha, weight = biomass)) +
+  geom_vline(xintercept=0.109, linetype = "dashed") +
+  geom_histogram(aes(y = after_stat(count / sum(count))), binwidth=0.002) +
+  theme_bw() +
+  labs(
+    x = "Siderophore investment α",
+    y = "Biomass density"
+  ) +
+  coord_cartesian( xlim = c(0, 0.11)) +
+  theme(
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank()
+  )
+
+plt6
+```
+
+Assemble SI figure
+```{r}
+plot_list <- list(plt1, plt2, plt3, plt4, plt5, plt6)
+
+plot <- plot_grid( # cowplot
+  plotlist = plot_list,
+  ncol = 2,
+  nrow = 3,
+  align = "hv",
+  labels = c("A", "B", "C", "D", "E", "F"),
+  label_size = 12,
+  label_fontface = "bold",
+  label_fontfamily = "sans"
+)
+
+save_plot(
+  filename = "results/stats_1e-2_10kN.png", 
+  plot = plot,
+  base_height = 10,
+  base_width = 7, 
+  dpi = 300,
+)
+```
+
+
+
+
+
+## sigma = 0.01, N = 1e4, theta = 1e-4
+```{r start}
+n = 4
+sigma = -2
+theta = -4
+desc <- paste0("N_E", n, "_sigma_E", sigma, "_theta_E", theta)
+result <- paste0("results/stats_", desc, ".csv")
+if (!file.exists(result)) {
+  writeConfig(
+    config,
+    desc,
+    replicates = 1,
+    rounds = 1e7,
+    write_every = 100,
+    seed = 93117,
+    pop_size = 10^n,
+    patch_lifetime = 10000,
+    mort_to_disp = 24.1225,
+    uniform_fraction = 0,
+    max_biomass = 121.012,
+    mut_prob = 10^theta,
+    mut_stdev = 10^sigma,
+    mut_range = c(0, 1),
+    initial = list(
+      list(alpha = 0.109, patches = 900)
+      )
+  )
+  command <- sprintf(
+    r"[cargo run --release --manifest-path ../../rust-finite/Cargo.toml -- %s %s]",
+    config, result
+  )
+  code <- system(command)
+}
+
+points <- read.csv(result, comment.char = "#")
+
+every10000rounds <- subset(points, round %% 10000 == 0)
+```
+
+
+
+```{r, fig.width = 6, fig.height = 6}
+tol = khroma::color("iridescent")
+initial = subset(points, round < 500000)
+
+plt1 <- ggplot(initial, aes(x = time, y = alpha, color = patch_count)) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "#555555") +
+  geom_hline(yintercept = 0.109, linetype = "dashed", color = "#555555") +
+  geom_point(size = 0.001, stroke = 0.5) +
+  labs(
+    x = "Simulation time",
+    y = "Siderophore investment α",
+    color = "Occupied patches"
+  ) +
+  scale_color_gradientn(colors = tol(23)[10:23],
+                        trans = "log",
+                        limits = c(1, 1000),
+                        breaks = c(1, 10, 100, 1000)) +
+  coord_cartesian( ylim = c(0, 0.11)) +
+  scale_x_continuous(expand = expansion(mult = c(0.05, 0.05))) +
+  theme_bw() +
+  theme(legend.position = "inside") +
+  theme(
+    aspect.ratio = 1, 
+    text = element_text(family = "sans"), 
+    legend.position.inside = c(0.7, 0.75),
+    legend.key.height  = unit(10, "pt"),
+    legend.background = element_blank()
+    )
+
+plt1
+```
+
+
+
+```{r}
+# Calculate total siderophore production
+production <- aggregate(alpha * biomass ~ time, data = every10000rounds, FUN = sum)
+names(production) <- c("time", "total_sid")
+production$total_sid <- production$total_sid / n
+
+plt2 <- ggplot(production, aes(x = time, y = total_sid)) +
+  geom_point(size = 0.01) +
+  labs(
+    x = "Simulation time",
+    y = "Per-patch siderophore production"
+  ) +
+  theme_bw() +
+  scale_y_log10() +
+  theme(legend.position = "inside",
+        legend.position.inside = c(0.7, 0.8)) +
+  theme(aspect.ratio = 1, text = element_text(family = "sans"))
+plt2
+```
+
+
+```{r}
+# Calculate total biomass
+biomass <- aggregate(biomass ~ time, data = every10000rounds, FUN = sum)
+names(biomass) <- c("time", "total")
+
+plt3 <- ggplot(biomass, aes(x = time, y = total)) +
+  geom_point(size = 0.01) +
+  labs(
+    x = "Simulation time",
+    y = "Total system biomass"
+  ) +
+  theme_bw() +
+  theme(legend.position = "inside",
+        legend.position.inside = c(0.7, 0.8)) +
+  theme(aspect.ratio = 1, text = element_text(family = "sans"))
+
+plt3
+```
+
+```{r}
+# Calculate total occupancy
+occupancy <- aggregate(patch_count ~ time, data = every10000rounds, FUN = sum)
+names(occupancy) <- c("time", "total")
+
+plt4 <- ggplot(occupancy, aes(x = time, y = total)) +
+  geom_point(size = 0.01) +
+  labs(
+    x = "Simulation time",
+    y = "Total patch occupancy"
+  ) +
+  theme_bw() +
+  theme(legend.position = "inside",
+        legend.position.inside = c(0.7, 0.8)) +
+  theme(aspect.ratio = 1, text = element_text(family = "sans"))
+
+plt4
+```
+
+```{r}
+strainwise <- aggregate(biomass ~ alpha, data = every10000rounds, FUN = sum)
+# density of patch counts
+plt4 <- ggplot(strainwise, aes(x = biomass)) +
+  geom_density() +
+  labs(
+    x = "Strain-wise patch occupany",
+  ) +
+  theme_bw() +
+  theme(legend.position = "inside",
+        legend.position.inside = c(0.7, 0.8)) +
+  theme(aspect.ratio = 1, text = element_text(family = "sans"))
+
+plt4
+```
+
+
+
+```{r}
+# Calculate number of strains
+strainnr <- as.data.frame(table(every10000rounds$time))
+names(strainnr) <- c("time", "total")
+strainnr$time <- as.numeric(as.character(strainnr$time))
+
+plt5 <- ggplot(strainnr, aes(x = time, y = total)) +
+  geom_point(size = 0.01) +
+  labs(
+    x = "Simulation time",
+    y = "Number of coexisting strains"
+  ) +
+  theme_bw() +
+  theme(legend.position = "inside",
+        legend.position.inside = c(0.7, 0.8)) +
+  theme(aspect.ratio = 1, text = element_text(family = "sans"))
+
+plt5
+```
+
+```{r}
+# Calculate number of strains >10 patches
+abundant <- subset(every10000rounds, patch_count >= n * 0.01)
+strainnr <- as.data.frame(table(abundant$time))
+names(strainnr) <- c("time", "total")
+strainnr$time <- as.numeric(as.character(strainnr$time))
+
+plt5 <- ggplot(strainnr, aes(x = time, y = total)) +
+  geom_point(size = 0.01) +
+  labs(
+    x = "Simulation time",
+    y = "# of strains in >1% of patches"
+  ) +
+  theme_bw() +
+  theme(legend.position = "inside",
+        legend.position.inside = c(0.7, 0.8)) +
+  theme(aspect.ratio = 1, text = element_text(family = "sans"))
+
+plt5
+```
+
+```{r}
+# Histogram of alpha
+plt6 <- ggplot(subset(every10000rounds, time > 0), aes(x = alpha, weight = biomass)) +
+  geom_vline(xintercept=0.109, linetype = "dashed") +
+  geom_histogram(aes(y = after_stat(count / sum(count))), binwidth=0.002) +
+  theme_bw() +
+  labs(
+    x = "Siderophore investment α",
+    y = "Biomass density"
+  ) +
+  coord_cartesian( xlim = c(0, 0.11)) +
+  theme(
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank()
+  )
+
+plt6
+```
+
+Assemble SI figure
+```{r}
+plot_list <- list(plt1, plt2, plt3, plt4, plt5, plt6)
+
+plot <- plot_grid( # cowplot
+  plotlist = plot_list,
+  ncol = 2,
+  nrow = 3,
+  align = "hv",
+  labels = c("A", "B", "C", "D", "E", "F"),
+  label_size = 12,
+  label_fontface = "bold",
+  label_fontfamily = "sans"
+)
+
+save_plot(
+  filename = "results/stats_1e-2_10kN.png", 
+  plot = plot,
+  base_height = 10,
+  base_width = 7, 
+  dpi = 300,
+)
+```
+
+
+
+## sigma = 0.01, N = 1e3, theta = 1e-6
+```{r start}
+n = 3
+sigma = -2
+theta = -6
+desc <- paste0("N_E", n, "_sigma_E", sigma, "_theta_E", theta)
+result <- paste0("results/stats_", desc, ".csv")
+if (!file.exists(result)) {
+  writeConfig(
+    config,
+    desc,
+    replicates = 1,
+    rounds = 1e7,
+    write_every = 100,
+    seed = 93117,
+    pop_size = 10^n,
+    patch_lifetime = 10000,
+    mort_to_disp = 24.1225,
+    uniform_fraction = 0,
+    max_biomass = 121.012,
+    mut_prob = 10^theta,
+    mut_stdev = 10^sigma,
+    mut_range = c(0, 1),
+    initial = list(
+      list(alpha = 0.00450425, patches = 100),
+      list(alpha = 0.0127954, patches = 100),
+      list(alpha = 0.0205846, patches = 100),
+      list(alpha = 0.028346, patches = 100),
+      list(alpha = 0.0380249, patches = 100),
+      list(alpha = 0.109132, patches = 100)
+      )
+  )
+  command <- sprintf(
+    r"[cargo run --release --manifest-path ../../rust-finite/Cargo.toml -- %s %s]",
+    config, result
+  )
+  code <- system(command)
+}
+
+points <- read.csv(result, comment.char = "#")
+
+every10000rounds <- subset(points, round %% 10000 == 0)
+```
+
+
+
+```{r, fig.width = 6, fig.height = 6}
+tol = khroma::color("iridescent")
+initial = subset(points, round < 500000)
+
+plt1 <- ggplot(initial, aes(x = time, y = alpha, color = patch_count)) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "#555555") +
+  geom_hline(yintercept = 0.109, linetype = "dashed", color = "#555555") +
+  geom_point(size = 0.001, stroke = 0.5) +
+  labs(
+    x = "Simulation time",
+    y = "Siderophore investment α",
+    color = "Occupied patches"
+  ) +
+  scale_color_gradientn(colors = tol(23)[10:23],
+                        trans = "log",
+                        limits = c(1, 1000),
+                        breaks = c(1, 10, 100, 1000)) +
+  coord_cartesian( ylim = c(0, 0.11)) +
+  scale_x_continuous(expand = expansion(mult = c(0.05, 0.05))) +
+  theme_bw() +
+  theme(legend.position = "inside") +
+  theme(
+    aspect.ratio = 1, 
+    text = element_text(family = "sans"), 
+    legend.position.inside = c(0.7, 0.75),
+    legend.key.height  = unit(10, "pt"),
+    legend.background = element_blank()
+    )
+
+plt1
+```
+
+
+```{r, fig.width = 6, fig.height = 6}
+tol = khroma::color("iridescent")
+
+plt1 <- ggplot(every10000rounds, aes(x = time, y = alpha, color = patch_count)) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "#555555") +
+  geom_hline(yintercept = 0.109, linetype = "dashed", color = "#555555") +
+  geom_point(size = 0.001, stroke = 0.5) +
+  labs(
+    x = "Simulation time",
+    y = "Siderophore investment α",
+    color = "Occupied patches"
+  ) +
+  scale_color_gradientn(colors = tol(23)[10:23],
+                        trans = "log",
+                        limits = c(1, 1000),
+                        breaks = c(1, 10, 100, 1000)) +
+  coord_cartesian( ylim = c(0, 0.11)) +
+  scale_x_continuous(expand = expansion(mult = c(0.05, 0.05))) +
+  theme_bw() +
+  theme(legend.position = "inside") +
+  theme(
+    aspect.ratio = 1, 
+    text = element_text(family = "sans"), 
+    legend.position.inside = c(0.7, 0.75),
+    legend.key.height  = unit(10, "pt"),
+    legend.background = element_blank()
+    )
+
+plt1
+```
+
+
+
+```{r}
+# Calculate total siderophore production
+production <- aggregate(alpha * biomass ~ time, data = every10000rounds, FUN = sum)
+names(production) <- c("time", "total_sid")
+production$total_sid <- production$total_sid / n
+
+plt2 <- ggplot(production, aes(x = time, y = total_sid)) +
+  geom_point(size = 0.01) +
+  labs(
+    x = "Simulation time",
+    y = "Per-patch siderophore production"
+  ) +
+  theme_bw() +
+  scale_y_log10() +
+  theme(legend.position = "inside",
+        legend.position.inside = c(0.7, 0.8)) +
+  theme(aspect.ratio = 1, text = element_text(family = "sans"))
+plt2
+```
+
+
+```{r}
+# Calculate total biomass
+biomass <- aggregate(biomass ~ time, data = every10000rounds, FUN = sum)
+names(biomass) <- c("time", "total")
+
+plt3 <- ggplot(biomass, aes(x = time, y = total)) +
+  geom_point(size = 0.01) +
+  labs(
+    x = "Simulation time",
+    y = "Total system biomass"
+  ) +
+  theme_bw() +
+  theme(legend.position = "inside",
+        legend.position.inside = c(0.7, 0.8)) +
+  theme(aspect.ratio = 1, text = element_text(family = "sans"))
+
+plt3
+```
+
+```{r}
+# Calculate total occupancy
+occupancy <- aggregate(patch_count ~ time, data = every10000rounds, FUN = sum)
+names(occupancy) <- c("time", "total")
+
+plt4 <- ggplot(occupancy, aes(x = time, y = total)) +
+  geom_point(size = 0.01) +
+  labs(
+    x = "Simulation time",
+    y = "Total patch occupancy"
+  ) +
+  theme_bw() +
+  theme(legend.position = "inside",
+        legend.position.inside = c(0.7, 0.8)) +
+  theme(aspect.ratio = 1, text = element_text(family = "sans"))
+
+plt4
+```
+
+```{r}
+strainwise <- aggregate(biomass ~ alpha, data = every10000rounds, FUN = sum)
+# density of patch counts
+plt4 <- ggplot(strainwise, aes(x = biomass)) +
+  geom_density() +
+  labs(
+    x = "Strain-wise patch occupany",
+  ) +
+  theme_bw() +
+  theme(legend.position = "inside",
+        legend.position.inside = c(0.7, 0.8)) +
+  theme(aspect.ratio = 1, text = element_text(family = "sans"))
+
+plt4
+```
+
+
+
+```{r}
+# Calculate number of strains
+strainnr <- as.data.frame(table(every10000rounds$time))
+names(strainnr) <- c("time", "total")
+strainnr$time <- as.numeric(as.character(strainnr$time))
+
+plt5 <- ggplot(strainnr, aes(x = time, y = total)) +
+  geom_point(size = 0.01) +
+  labs(
+    x = "Simulation time",
+    y = "Number of coexisting strains"
+  ) +
+  theme_bw() +
+  theme(legend.position = "inside",
+        legend.position.inside = c(0.7, 0.8)) +
+  theme(aspect.ratio = 1, text = element_text(family = "sans"))
+
+plt5
+```
+
+```{r}
+# Calculate number of strains >10 patches
+abundant <- subset(every10000rounds, patch_count >= n * 0.01)
+strainnr <- as.data.frame(table(abundant$time))
+names(strainnr) <- c("time", "total")
+strainnr$time <- as.numeric(as.character(strainnr$time))
+
+plt5 <- ggplot(strainnr, aes(x = time, y = total)) +
+  geom_point(size = 0.01) +
+  labs(
+    x = "Simulation time",
+    y = "# of strains in >1% of patches"
+  ) +
+  theme_bw() +
+  theme(legend.position = "inside",
+        legend.position.inside = c(0.7, 0.8)) +
+  theme(aspect.ratio = 1, text = element_text(family = "sans"))
+
+plt5
+```
+
+```{r}
+# Histogram of alpha
+plt6 <- ggplot(subset(every10000rounds, time > 0), aes(x = alpha, weight = biomass)) +
+  geom_vline(xintercept=0.109, linetype = "dashed") +
+  geom_histogram(aes(y = after_stat(count / sum(count))), binwidth=0.002) +
+  theme_bw() +
+  labs(
+    x = "Siderophore investment α",
+    y = "Biomass density"
+  ) +
+  coord_cartesian( xlim = c(0, 0.11)) +
+  theme(
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank()
+  )
+
+plt6
+```
+
+Assemble SI figure
+```{r}
+plot_list <- list(plt1, plt2, plt3, plt4, plt5, plt6)
+
+plot <- plot_grid( # cowplot
+  plotlist = plot_list,
+  ncol = 2,
+  nrow = 3,
+  align = "hv",
+  labels = c("A", "B", "C", "D", "E", "F"),
+  label_size = 12,
+  label_fontface = "bold",
+  label_fontfamily = "sans"
+)
+
+save_plot(
+  filename = "results/stats_1e-2_10kN.png", 
+  plot = plot,
+  base_height = 10,
+  base_width = 7, 
+  dpi = 300,
+)
+```

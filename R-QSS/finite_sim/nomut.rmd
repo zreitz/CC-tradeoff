@@ -1,0 +1,147 @@
+---
+title: "Example simulations"
+output: 
+  html_document
+---
+R code used to generate Figure XXXX
+
+```{r, eval = F}
+.vsc.attach()
+setwd("R-QSS/finite_sim")
+```
+
+```{r imports}
+library(ggplot2)
+library(cowplot)
+library(khroma)
+
+config = "rust_config.json"
+
+source("utils.R")
+```
+
+## No mutation
+
+```{r start}
+desc <- "nomut_10kN"
+result <- paste0("results/", desc, ".csv")
+if (!file.exists(result)) {
+  writeConfig(
+    config,
+    desc,
+    replicates = 1,
+    rounds = 1e7,
+    write_every = 10000,
+    seed = 93117,
+    pop_size = 10000,
+    patch_lifetime = 10000,
+    mort_to_disp = 21.7103,
+    uniform_fraction = 0,
+    max_biomass = 121.012,
+    mut_prob = 0,
+    mut_stdev = 0.05,
+    mut_range = c(0, 1),
+    initial = list(
+      list(alpha = 0.0, patches = 1000),
+      list(alpha = 0.00906048, patches = 1000),
+      list(alpha = 0.0174581, patches = 1000),
+      list(alpha = 0.0255439, patches = 1000),
+      list(alpha = 0.0345996, patches = 1000),
+      list(alpha = 0.0566182, patches = 1000)
+      )
+  )
+  command <- sprintf(
+    r"[cargo run --release --manifest-path ../../rust-finite/Cargo.toml -- %s %s]",
+    config, result
+  )
+  code <- system(command)
+}
+
+points <- read.csv(result, comment.char = "#")
+```
+
+```{r, fig.width = 6, fig.height = 6}
+points$alpha <- as.factor(points$alpha)
+
+plt2 <- ggplot(points, aes(x = round, y = patch_count, color = alpha, group = alpha)) +
+  geom_line(linewidth = 1, alpha = 0.9) +
+  geom_hline(yintercept = 1000, linetype = "dashed") +
+  #geom_point(size = 0.001, stroke = 0.5) +
+  labs(
+    x = "Simulation round",
+    y = "Occupied patches",
+    color = "Strain α",
+  ) +
+  scale_color_bright() +
+  coord_cartesian(ylim = c(0, 2500)) +
+  scale_x_continuous(expand = expansion(mult = c(0, 0))) +
+  theme_bw() +
+  theme(legend.position = "bottom", aspect.ratio = 1, text = element_text(family = "sans"))
+
+plt2
+```
+
+
+
+```{r start}
+desc <- "nomut_1kN"
+result <- paste0("results/", desc, ".csv")
+if (!file.exists(result)) {
+  writeConfig(
+    config,
+    desc,
+    replicates = 9,
+    rounds = 1e7,
+    write_every = 1000,
+    seed = 93117,
+    pop_size = 1000,
+    patch_lifetime = 10000,
+    mort_to_disp = 21.7103,
+    uniform_fraction = 0,
+    max_biomass = 121.012,
+    mut_prob = 0,
+    mut_stdev = 0.05,
+    mut_range = c(0, 1),
+    initial = list(
+      list(alpha = 0.0, patches = 100),
+      list(alpha = 0.00906048, patches = 100),
+      list(alpha = 0.0174581, patches = 100),
+      list(alpha = 0.0255439, patches = 100),
+      list(alpha = 0.0345996, patches = 100),
+      list(alpha = 0.0566182, patches = 100)
+      )
+  )
+  command <- sprintf(
+    r"[cargo run --release --manifest-path ../../rust-finite/Cargo.toml -- %s %s]",
+    config, result
+  )
+  code <- system(command)
+}
+
+points <- read.csv(result, comment.char = "#")
+```
+
+```{r, fig.width = 6, fig.height = 6}
+points$alpha <- as.factor(points$alpha)
+
+plt2 <- ggplot(points, aes(x = round, y = patch_count, color = alpha, group = alpha)) +
+  geom_hline(yintercept = 104.411, linetype = "dashed") +
+  facet_wrap(vars(replicate), nrow = 3) +
+  geom_line(linewidth = 1, alpha = 0.7) +
+  #geom_point(size = 0.001, stroke = 0.5) +
+  labs(
+    x = "Simulation round",
+    y = "Occupied patches",
+    color = "Strain α",
+  ) +
+  scale_color_bright() +
+  coord_cartesian(ylim = c(0, 1000)) +
+  #scale_x_continuous(expand = expansion(mult = c(0.05, 0.05))) +
+  scale_x_log10() +
+  theme_bw() +
+  theme(legend.position = "bottom") +
+  theme(aspect.ratio = 1, text = element_text(family = "sans"))
+
+plt2
+```
+

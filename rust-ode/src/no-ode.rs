@@ -16,26 +16,25 @@ use std::io::prelude::*;
 use solve::{get_biomass, PatchState};
 
 pub fn solve(alphas: Vec<f64>, y0: PatchState, _tend: f64) -> (PatchState, bool) {
-    // Determine the lowest alpha with a positive biomass
-    let winner = y0.iter().position(|x| *x > 0.0).unwrap();
+    // Safely determine the lowest alpha with a positive biomass
+    let winner_opt = y0.iter().position(|x| *x > 0.0);
 
-    // If no one is alive, return
-    if winner > 49 {return(y0, true)}
-
-    // Resources can be left at 0
-    let mut new_status = PatchState::repeat(0.0);
-    new_status[winner] = get_biomass(alphas[winner]);
-
-    // Always at equilibrium
-    return (new_status, true)
+    match winner_opt {
+        Some(winner) => {
+            let mut new_status = PatchState::repeat(0.0);
+            new_status[winner] = get_biomass(alphas[winner]);
+            (new_status, true)
+        }
+        None => {
+            // If no one is alive, return the empty state
+            (y0, true)
+        }
+    }
 }
 
-/* 
-Functions herein are hard-coded for 50 possible alpha values
-plus three resource state variables. Replace all instances of 50 to 53 when changing that.
+/* Functions herein are hard-coded for 50 possible alpha values.
+Resources are evaluated algebraically via QSS.
 */
-
-static INIT_HOLO: f64 = 0.2;
 
 #[derive(Serialize, Deserialize, Debug)]
 struct Session {
@@ -68,8 +67,8 @@ impl Session {
     }
 }
 
-// Matrix has 53 rows (state variables) and [pop_size] columns (patches)
-type PatchMatrix = Matrix<f64, U53, Dyn, VecStorage<f64, U53, Dyn>>;
+// Matrix has 50 rows (state variables) and [pop_size] columns (patches)
+type PatchMatrix = Matrix<f64, U50, Dyn, VecStorage<f64, U50, Dyn>>;
 
 #[derive(Debug)]
 struct Population {
@@ -83,13 +82,11 @@ struct Population {
 impl Population {
 
     fn initialize<R: Rng + ?Sized>(session: &Session, rng: &mut R) -> Population {
-        //let alphas: Vec<f64> = (0..50).map(|x| x as f64 / 100.0).collect();
         let alphas: Vec<f64> = draw_strains(
-            50, 0, 4000, rng);
+            50, 0, 2000, true, rng);
         
         // Make a small population to calculate equilibria for each strain
-        let mut eq_patches: PatchMatrix = PatchMatrix::repeat(50, 0.0);
-        eq_patches.set_row(52, &RowDVector::repeat(50, 3.0));
+        let eq_patches: PatchMatrix = PatchMatrix::repeat(50, 0.0);
 
         let mut eq_pop = Population{
             states: eq_patches, alphas: alphas.clone(), at_eq: vec![false; 50], time: 0.0};
@@ -101,11 +98,7 @@ impl Population {
         eq_pop.step_forward(50.0);
 
         // Generate a new patch matrix
-        let mut patches: PatchMatrix = PatchMatrix::repeat(session.pop_size, 0.0);
-        // Last row is iron - initialize to equilibrium
-        patches.set_row(52, &RowDVector::repeat(session.pop_size, 1.0));
-        // Add holo siderophore to prevent death with small inocula
-        patches.set_row(51, &RowDVector::repeat(session.pop_size, INIT_HOLO));
+        let patches: PatchMatrix = PatchMatrix::repeat(session.pop_size, 0.0);
 
         Population{
             states: patches,
@@ -131,7 +124,7 @@ impl Population {
                 // Do nothing if the patch is at equilibrium
                 if *at_eq {return};
     
-                let patch: SVector<f64, 53> = col.clone_owned();
+                let patch: SVector<f64, 50> = col.clone_owned();
     
                 // Step forward with the numerical ODE solver
                 let (mut result, new_at_eq) = solve(
@@ -141,19 +134,10 @@ impl Population {
                 );
     
                 // Cull dead strains (<1e-3)
-                let mut living = 0;
                 for strain in 0..50 {
                     if result[strain] < 1.0e-3 {
                         result[strain] = 0.0;
                     }
-                    else {
-                        living += 1
-                    }
-                }
-                if living == 0 {    // Reset patch
-                    result[50] = 0.0;
-                    result[51] = INIT_HOLO;
-                    result[52] = 1.0;
                 }
     
                 // Update the states matrix and residents list
@@ -163,16 +147,14 @@ impl Population {
     }
 
     fn turnover(&mut self, patch: usize) {
-        self.states.set_column(patch, &SVector::repeat( 0.0));
-        self.states[(51, patch)] = INIT_HOLO;
-        self.states[(52, patch)] = 1.0;
+        self.states.set_column(patch, &SVector::repeat(0.0));
         self.at_eq[patch] = true;
     }
 }
 
 
 // Draw n strains from a uniform distribution
-fn draw_strains<R: Rng + ?Sized>(n: usize, min: u64, max: u64, rng: &mut R) -> Vec<f64> {
+fn draw_strains<R: Rng + ?Sized>(n: usize, min: u64, max: u64, zero: bool, rng: &mut R) -> Vec<f64> {
     let dist = Uniform::new(min, max).unwrap();
     let mut samples = Vec::with_capacity(n);
 
@@ -182,6 +164,8 @@ fn draw_strains<R: Rng + ?Sized>(n: usize, min: u64, max: u64, rng: &mut R) -> V
             samples.push(x);
         }
     }
+    // Add total cheater, if flagged
+    if zero {samples[0] = 0};
     let mut strains = samples.iter()
             .map(|x| *x as f64 / 10000.).collect::<Vec<f64>>();
     strains.sort_by(f64::total_cmp);
@@ -194,12 +178,11 @@ Perform one round of kick / flow
     */
 fn simulate_round<R: Rng + ?Sized>(mut population: Population, session: &Session, rng: &mut R, print_stats: bool) -> Population {
     // Calculate colonization pressures for each strain
-    let col_pool:SVector<f64, 50> = population.states.column_sum()
-                            .remove_fixed_rows::<3>(50);
-    let col_pressure:f64 = col_pool.iter().sum();
+    let col_pool: SVector<f64, 50> = population.states.column_sum();
+    let col_pressure: f64 = col_pool.iter().sum();
 
     // Uniform distribution for the immigrants
-    let uniform_dist = Uniform::new(0,50).unwrap();
+    let uniform_dist = Uniform::new(0, 50).unwrap();
 
     // If the population is dead, inoculate patch 0 with a random immigrant, step forward, and return
     if col_pressure < 1e-3 {
@@ -216,7 +199,7 @@ fn simulate_round<R: Rng + ?Sized>(mut population: Population, session: &Session
 
     // Dynamically set time step to scale probability so that 5% of patches are kicked
     // This is just for housekeeping, shouldn't affect dynamics
-    let stepsize = - 0.95.ln() / (prob_event);
+    let stepsize = - 0.95_f64.ln() / (prob_event);
 
     if print_stats {
         println!("Time step: {}", stepsize);
@@ -235,7 +218,7 @@ fn simulate_round<R: Rng + ?Sized>(mut population: Population, session: &Session
             .unwrap().sample(rng) as usize;
 
     // Draw who is being kicked (without replacement)
-    let kicked:Vec<usize> = sample(rng, session.pop_size, num_events as usize).into_vec();
+    let kicked: Vec<usize> = sample(rng, session.pop_size, num_events as usize).into_vec();
 
     // Prepare distributions to draw colonizers from
     let weighted_dist = WeightedIndex::new(&col_pool)
@@ -331,9 +314,8 @@ fn main() {
         wtr.serialize(header).unwrap();
 
         for i in 0..=session.rounds {
-            //eprintln!("{}", population.states.column(0));
             if i % session.write_every == 0 {
-                let mut total_biomasses:Vec<f64> = population.states
+                let mut total_biomasses: Vec<f64> = population.states
                     .column_sum()
                     .data.0[0][0..50]
                     .to_vec();

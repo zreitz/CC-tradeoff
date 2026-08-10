@@ -10,7 +10,10 @@ use std::fs;
 use std::fs::OpenOptions;
 use std::io::prelude::*;
 use std::path::PathBuf;
-use zzz::ProgressBarIterExt as _;
+
+use rayon::prelude::*;
+use std::sync::mpsc;
+use std::thread;
 
 
 // ============================================================
@@ -124,6 +127,7 @@ struct Session {
     patch_lifetime:   f64,  // mean patch lifespan (time units)
     mort_to_disp:     f64,  // ratio: extinction rate / colonization rate
     uniform_fraction: f64,  // fraction of colonizations drawn uniformly
+    decay_factor:     f64,  // fraction of seed bank that survives (0.0 for no memory)
 
     // Mutation
     max_biomass: f64,  // normaliser for biomass-scaled mutation probability
@@ -157,6 +161,7 @@ impl Session {
 struct Population {
     patches: Vec<Option<Strain>>,
     time:    f64,
+    seed_bank: BTreeMap<u64, f64>
 }
 
 impl Population {
@@ -177,7 +182,7 @@ impl Population {
             }
         }
 
-        Population { patches, time: 0.0 }
+        Population { patches, time: 0.0, seed_bank: BTreeMap::new() }
     }
 
     fn col_pressure(&self) -> f64 {
@@ -185,13 +190,6 @@ impl Population {
             .filter_map(|p| p.as_ref())
             .map(|s| s.biomass)
             .sum()
-    }
-
-    fn residents(&self) -> Vec<(f64, f64)> {
-        self.patches.iter()
-            .filter_map(|p| p.as_ref())
-            .map(|s| (s.alpha, s.biomass))
-            .collect()
     }
 }
 
@@ -203,22 +201,28 @@ impl Population {
 #[derive(Serialize, Deserialize, Debug)]
 struct Record {
     replicate:   usize,
+    round:       usize,
     time:        f64,
     alpha:       f64,
     patch_count: usize,
+    biomass:     f64
 }
 
-fn take_census(population: &Population, replicate: usize, time: f64) -> Vec<Record> {
-    let mut map: BTreeMap<u64, usize> = BTreeMap::new();
+fn take_census(population: &Population, replicate: usize, time: f64, round: usize) -> Vec<Record> {
+    let mut map: BTreeMap<u64, (usize, f64)> = BTreeMap::new();
     for s in population.patches.iter().filter_map(|p| p.as_ref()) {
-        *map.entry(s.alpha.to_bits()).or_insert(0) += 1;
+        let entry = map.entry(s.alpha.to_bits()).or_insert((0, 0.0));
+        entry.0 += 1;
+        entry.1 += s.biomass;
     }
     map.into_iter()
-        .map(|(key, patch_count)| Record {
+        .map(|(key, (patch_count, biomass))| Record {
             replicate,
+            round,
             time,
             alpha: f64::from_bits(key),
             patch_count,
+            biomass,
         })
         .collect()
 }
@@ -234,7 +238,20 @@ fn simulate_round<R: Rng + ?Sized>(
         session: &Session,
         rng: &mut R) -> Option<Population> {
 
-    let col_pressure = population.col_pressure();
+        
+    // -- Calculate colonization pressures, adding seed bank if relevant
+
+    // Live pressure from current patches
+    let live_pressure: f64 = population.col_pressure();
+
+    // Decay seed bank
+    for val in population.seed_bank.values_mut() {
+        *val *= session.decay_factor;
+    }
+    population.seed_bank.retain(|_, v| *v > 1e-3);
+
+    let bank_pressure: f64 = population.seed_bank.values().sum();
+    let col_pressure: f64 = live_pressure + bank_pressure;
 
     if col_pressure < 1e-3 {
         return None;
@@ -260,8 +277,16 @@ fn simulate_round<R: Rng + ?Sized>(
 
     let victims: Vec<usize> = sample(rng, session.pop_size, num_events).into_vec();
 
-    let (alphas, biomasses): (Vec<f64>, Vec<f64>) =
-        population.residents().into_iter().unzip();
+    // Make distribution of possible strains weighted by biomass
+    let (mut alphas, mut biomasses): (Vec<f64>, Vec<f64>) = population.patches.iter()
+        .filter_map(|p| p.as_ref())
+        .map(|s| (s.alpha, s.biomass))
+        .unzip();
+
+    for (&bits, &pressure) in population.seed_bank.iter() {
+        alphas.push(f64::from_bits(bits));
+        biomasses.push(pressure);
+    }
     let weighted_dist = WeightedIndex::new(&biomasses).unwrap();
 
     for (i, victim) in victims.into_iter().enumerate() {
@@ -288,6 +313,13 @@ fn simulate_round<R: Rng + ?Sized>(
         }
     }
 
+    // Inject current round's live pressures into bank
+    if session.decay_factor > 0.0 {
+        for s in population.patches.iter().filter_map(|p| p.as_ref()) {
+            *population.seed_bank.entry(s.alpha.to_bits()).or_insert(0.0) += s.biomass;
+        }
+    }
+
     Some(population)
 }
 
@@ -301,19 +333,32 @@ fn simulate_replicate(session: &Session, replicate: usize, seed: u64) -> Vec<Rec
     let mut population = Population::initialize(session);
     let mut census: Vec<Record> = vec![];
 
-    census.extend(take_census(&population, replicate, population.time));
+    census.extend(take_census(&population, replicate, population.time, 0));
 
-    for round in 0..session.rounds {
+    for round in 1..session.rounds {
         match simulate_round(population, session, &mut rng) {
-            None => break,
+            // Record the time of extinction
+            None => {
+                census.push(Record {
+                    replicate,
+                    round,
+                    time: 0.0,
+                    alpha: f64::NAN,
+                    patch_count: 0,
+                    biomass: 0.0,
+                });
+                break;
+            },
             Some(pop) => {
                 population = pop;
                 if round % session.write_every == 0 || round == session.rounds - 1 {
-                    census.extend(take_census(&population, replicate, population.time));
-                    eprintln!("replicate {replicate} | round {round} | t={:.2} | occupied={}/{}",
-                        population.time,
-                        population.patches.iter().filter(|p| p.is_some()).count(),
-                        session.pop_size);
+                    census.extend(take_census(&population, replicate, population.time, round));
+                    if round % 10000 == 0 {
+                        eprintln!("replicate {replicate} | round {round} | t={:.2} | occupied={}/{}",
+                            population.time,
+                            population.patches.iter().filter(|p| p.is_some()).count(),
+                            session.pop_size);
+                    }
                 }
             }
         }
@@ -352,27 +397,48 @@ fn prepare_outpath(args: &[String]) -> PathBuf {
 
 fn main() {
     let args: Vec<String> = env::args().collect();
-    assert!(args.len() > 1,
-            "ERROR. Example usage: $ cargo run -- in_config.json [outpath.csv]");
+    assert!(
+        args.len() > 1,
+        "ERROR. Example usage: $ cargo run -- in_config.json [outpath.csv]"
+    );
 
     let session = Session::from_json(&args[1]);
     let outpath = prepare_outpath(&args);
 
-    let mut wtr = csv::Writer::from_path(&outpath).unwrap();
+    // Initialize an MPSC channel to send data to the writer thread
+    let (tx, rx) = mpsc::channel::<Vec<Record>>();
 
-    let mut seed = session.seed;
-    for replicate in (0..session.replicates).into_iter().progress() {
-        let results = simulate_replicate(&session, replicate, seed);
-        for row in results {
-            wtr.serialize(row).unwrap();
+    // Spawn a dedicated thread for CSV writing to prevent I/O blocking in the worker pool
+    let outpath_clone = outpath.clone();
+    let writer_thread = thread::spawn(move || {
+        let mut wtr = csv::Writer::from_path(&outpath_clone).unwrap();
+        
+        // Loop runs until all `tx` senders are dropped
+        for results in rx {
+            for row in results {
+                wtr.serialize(row).unwrap();
+            }
+            wtr.flush().unwrap();
         }
-        wtr.flush().unwrap();
-        seed += 1;
-    }
+    });
 
-    // Trailing JSON comment for provenance
+    // Execute replicates in parallel
+    (0..session.replicates)
+        .into_par_iter()
+        .for_each_with(tx, |tx, replicate| {
+            let seed = session.seed + replicate as u64;
+            
+            let results = simulate_replicate(&session, replicate, seed);
+            
+            // Transmit results to the writer thread
+            tx.send(results).expect("Failed to send results to writer thread");
+        });
+
+    writer_thread.join().expect("Writer thread panicked");
+
+    // Append trailing JSON comment for provenance sequentially
     let mut serialized = serde_json::to_string(&session).unwrap();
     serialized.insert_str(0, "# ");
-    let mut file = OpenOptions::new().append(true).open(outpath).unwrap();
+    let mut file = OpenOptions::new().append(true).open(&outpath).unwrap();
     file.write_all(serialized.as_bytes()).unwrap();
 }

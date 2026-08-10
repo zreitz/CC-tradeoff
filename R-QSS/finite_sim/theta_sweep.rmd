@@ -1,0 +1,320 @@
+---
+title: "Example simulations"
+output: 
+  html_document
+---
+R code used to generate Figure XXXX
+
+```{r, eval = F}
+.vsc.attach()
+setwd("R-QSS/finite_sim")
+```
+
+```{r imports}
+library(ggplot2)
+library(cowplot)
+library(khroma)
+
+config = "rust_config.json"
+
+source("utils.R")
+```
+
+
+```{r start}
+values <- seq(from = -5, to = 0, by = 1)
+
+run_rust <- function(n = 4, sigma = -2, theta = -2) {
+
+  desc <- paste0("N_E", n, "_sigma_E", sigma, "_theta_E", theta)
+  result <- paste0("results/", desc, "_death.csv")
+  config <- paste0("results/configs/", desc, ".json")
+  if (!file.exists(result)) {
+    writeConfig(
+      config,
+      desc,
+      replicates = 10,
+      rounds = 1e6,
+      write_every = 100000,
+      seed = 93117,
+      pop_size = 10^n,
+      patch_lifetime = 10000,
+      mort_to_disp = 24.1225,
+      uniform_fraction = 0,
+      max_biomass = 121.012,
+      mut_prob = 10^theta,
+      mut_stdev = 10^sigma,
+      mut_range = c(0, 1),
+      initial = list(
+        list(alpha = 0.00450425, patches = as.integer(10^n * 0.1)),
+        list(alpha = 0.0127954, patches = as.integer(10^n * 0.1)),
+        list(alpha = 0.0205846, patches = as.integer(10^n * 0.1)),
+        list(alpha = 0.028346, patches = as.integer(10^n * 0.1)),
+        list(alpha = 0.0380249, patches = as.integer(10^n * 0.1)),
+        list(alpha = 0.109132, patches = as.integer(10^n * 0.1))
+        )
+    )
+    command <- sprintf(
+      r"[cargo run --release --manifest-path ../../rust-finite/Cargo.toml -- %s %s]",
+      config, result
+    )
+    code <- system(command)
+  }
+  result
+}
+
+results <- lapply(values, function(x) run_rust(theta = x))
+
+points <- read.csv(result, comment.char = "#")
+```
+
+
+```{r, fig.width = 6, fig.height = 6}
+
+survivors <- subset(points, patch_count > 10^n / 100)
+every1000rounds <- subset(survivors, round %% 1000 == 0)
+
+every1000rounds$replicate <- as.factor(every1000rounds$replicate)
+
+colors <- c(color("muted")(9), "#DDDDDD")
+
+plt1 <- ggplot(every1000rounds, aes(x = time, y = alpha, color = replicate)) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "#555555") +
+  geom_hline(yintercept = 0.109, linetype = "dashed", color = "#555555") +
+  geom_point(size = 0.001, stroke = 0.5) +
+  labs(
+    x = "Simulation time",
+    y = "Siderophore investment α of surviving strains"
+  ) +
+  scale_color_manual(values = colors) +
+  coord_cartesian( ylim = c(0, 0.11)) +
+  scale_x_continuous(expand = expansion(mult = c(0.05, 0.05))) +
+  theme_bw() +
+  theme(legend.position = "none") +
+  theme(aspect.ratio = 1, text = element_text(family = "sans"))
+
+plt1
+```
+
+```{r, fig.width = 6, fig.height = 6}
+firstrep <- subset(points, replicate == 0 & round %% 1000 == 0 & patch_count > 5)
+
+tol = khroma::color("iridescent")
+
+plt1 <- ggplot(firstrep, aes(x = time, y = alpha, color = patch_count)) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "#555555") +
+  geom_hline(yintercept = 0.109, linetype = "dashed", color = "#555555") +
+  geom_point(size = 0.001, stroke = 0.5) +
+  labs(
+    x = "Simulation time",
+    y = "Siderophore investment α of surviving strains",
+    color = "Occupied patches"
+  ) +
+  scale_color_gradientn(colors = tol(23)[10:23],
+                        trans = "log",
+                        limits = c(1, 10000),
+                        breaks = c(1, 10, 100, 1000, 10000)) +
+  coord_cartesian( ylim = c(0, 0.11)) +
+  scale_x_continuous(expand = expansion(mult = c(0.05, 0.05))) +
+  theme_bw() +
+  theme(legend.position = "none") +
+  theme(aspect.ratio = 1, text = element_text(family = "sans"))
+
+plt1
+```
+
+
+## direct comparison to infinite
+```{r start}
+desc <- "mut_0.01_comp"
+result <- paste0("results/", desc, ".csv")
+if (!file.exists(result)) {
+  writeConfig(
+    config,
+    desc,
+    replicates = 1,
+    rounds = 1e7,
+    write_every = 10,
+    seed = 93117,
+    pop_size = 10000,
+    patch_lifetime = 10000,
+    mort_to_disp = 24.1225,
+    uniform_fraction = 0,
+    max_biomass = 121.012,
+    mut_prob = 1e-4,
+    mut_stdev = 0.01,
+    mut_range = c(0, 1),
+    initial = list(
+      list(alpha = 0.109, patches = 1000)
+      )
+  )
+  command <- sprintf(
+    r"[cargo run --release --manifest-path ../../rust-finite/Cargo.toml -- %s %s]",
+    config, result
+  )
+  code <- system(command)
+}
+
+points <- read.csv(result, comment.char = "#")
+```
+
+```{r, fig.width = 6, fig.height = 6}
+pltpoints <- subset(points, round > 9700000 & round %% 100 == 0)
+
+tol = khroma::color("iridescent")
+
+plt1 <- ggplot(pltpoints, aes(x = time, y = alpha, color = patch_count)) +
+#plt1 <- ggplot(points, aes(x = time, y = alpha)) +
+  geom_point(size = 0.001, stroke = 0.5) +
+  labs(
+    x = "Simulation time",
+    y = "Siderophore investment α of surviving strains",
+    color = "Occupied\npatches\n"
+  ) +
+  scale_color_gradientn(colors = tol(23)[10:23],
+                        trans = "log",
+                        limits = c(1, 10000),
+                        breaks = c(1, 10, 100, 1000, 10000)) +
+  coord_cartesian(ylim = c(0, 0.1)) +
+  scale_x_continuous(expand = expansion(mult = c(0, 0))) +
+  theme_bw() +
+  theme(legend.position = "inside",
+        legend.position.inside = c(0.85, 0.8)) +
+  theme(aspect.ratio = 1, text = element_text(family = "sans"))
+
+plt1
+```
+
+
+## Show that the coexistence is not transient
+```{r}
+df <- subset(points, round == 9999999)
+
+finalstrains <- unname(Map(function(a, p) list(alpha = a, patches = p), df$alpha, df$patch_count))
+```
+
+```{r start}
+desc <- "nomut_continuation"
+result <- paste0("results/", desc, ".csv")
+if (!file.exists(result)) {
+  writeConfig(
+    config,
+    desc,
+    replicates = 1,
+    rounds = 1e7,
+    write_every = 1000,
+    seed = 93117,
+    pop_size = 10000,
+    patch_lifetime = 10000,
+    mort_to_disp = 24.1225,
+    uniform_fraction = 0,
+    max_biomass = 121.012,
+    mut_prob = 0,
+    mut_stdev = 0.05,
+    mut_range = c(0, 1),
+    initial = finalstrains
+  )
+  command <- sprintf(
+    r"[cargo run --release --manifest-path ../../rust-finite/Cargo.toml -- %s %s]",
+    config, result
+  )
+  code <- system(command)
+}
+
+points <- read.csv(result, comment.char = "#")
+```
+
+```{r, fig.width = 6, fig.height = 6}
+tol = khroma::color("iridescent")
+
+plt2 <- ggplot(points, aes(x = time, y = alpha, color = patch_count)) +
+#plt1 <- ggplot(points, aes(x = time, y = alpha)) +
+  geom_point(size = 0.001, stroke = 0.5) +
+  labs(
+    x = "Simulation time",
+    y = "Siderophore investment α of surviving strains",
+    color = "Occupied\npatches\n"
+  ) +
+  scale_color_gradientn(colors = tol(23)[10:23],
+                        trans = "log",
+                        limits = c(1, 10000),
+                        breaks = c(1, 10, 100, 1000, 10000)) +
+  coord_cartesian(ylim = c(0, 0.1)) +
+  scale_x_continuous(expand = expansion(mult = c(0, 0))) +
+  theme_bw() +
+  theme(legend.position = "inside",
+        legend.position.inside = c(0.85, 0.8)) +
+  theme(aspect.ratio = 1, text = element_text(family = "sans"))
+
+plt2
+```
+
+
+## Calculate five-number statistics of distributions
+```{r}
+points <- subset(points, round > 100000)
+popsize <- 10000
+
+# Compute values for each time point, then record five-number summaries
+production <- aggregate(alpha * biomass ~ time, data = points, FUN = sum)
+productions <- fivenum(production[,2]) / popsize
+
+biomass <- aggregate(biomass ~ time, data = points, FUN = sum)
+biomasses <- fivenum(biomass[,2]) / popsize
+
+occupancy <- aggregate(patch_count ~ time, data = points, FUN = sum)
+occupancies <- fivenum(occupancy[,2]) / popsize
+```
+
+
+
+
+## Compare to infinite patch model
+```{r}
+infinite <- readRDS("../niche_shadow_sim/comparison_stats.rda")
+```
+
+```{r}
+df <- as.data.frame(rbind(infinite$production, productions))
+ylab = "Total siderophore production"
+df$Simulation <- as.factor(c("Patch-occupancy", "Gillespie-style"))
+
+plt1 <- ggplot(df, aes(x = Simulation, ymin = V1, lower = V2, middle = V3, upper = V4, ymax = V5, group = Simulation)) +
+  geom_boxplot(stat = "identity") + 
+  labs(
+    x = NULL,
+    y = ylab
+  )+
+  theme_bw()
+plt1
+```
+
+```{r}
+df <- as.data.frame(rbind(infinite$biomass, biomasses))
+ylab = "Total biomass"
+df$Simulation <- c("Patch-occupancy", "Gillespie-style")
+
+plt2 <- ggplot(df, aes(x = Simulation, ymin = V1, lower = V2, middle = V3, upper = V4, ymax = V5, group = Simulation)) +
+  geom_boxplot(stat = "identity") + 
+  labs(
+    x = NULL,
+    y = ylab
+  )+
+  theme_bw()
+plt2
+```
+
+```{r}
+df <- as.data.frame(rbind(infinite$occupancy, occupancies))
+ylab = "Total patch occupancy"
+df$Simulation <- c("Patch-occupancy", "Gillespie-style")
+
+plt3 <- ggplot(df, aes(x = Simulation, ymin = V1, lower = V2, middle = V3, upper = V4, ymax = V5, group = Simulation)) +
+  geom_boxplot(stat = "identity") + 
+  labs(
+    x = NULL,
+    y = ylab
+  )+
+  theme_bw()
+plt3
+```

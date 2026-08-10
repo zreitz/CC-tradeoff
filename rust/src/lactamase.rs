@@ -46,14 +46,28 @@ impl Eq for Strain {}
 
 
 pub fn get_biomass(alpha: f64) -> f64 {
-    let (d, foodIn, toxinIn) = (0.1f64, 1.0f64, 0.9f64);
-    let sol: f64 = - (2.0 * d.powi(3) + d * (toxinIn + foodIn * (alpha - 1.0)) + d.powi(2) * alpha + foodIn * (alpha - 1.0) * alpha
-            - (-4.0 * d.powi(3) * toxinIn * alpha + (d * (toxinIn + foodIn * (alpha - 1.0)) + d.powi(2) * alpha + foodIn * (alpha - 1.0) * alpha).powi(2)).sqrt())
-            / (2.0 * d * (d + alpha));
-    if sol.is_nan() || sol.is_sign_negative() {
-        return 0f64
+    let (d, food_in, toxin_in) = (0.1f64, 1.0f64, 0.9f64);
+    let (gamma, epsilon) = (1.0f64, 1.0f64);
+
+    let l_term = d * (toxin_in + food_in * (alpha - 1.0) * gamma)
+        - d.powi(2) * alpha * epsilon
+        + food_in * (alpha - 1.0) * alpha * gamma * epsilon;
+
+    let rad_term = 4.0 * d.powi(2) * food_in * (alpha - 1.0) * alpha * gamma * epsilon * (d + alpha * epsilon)
+        + l_term.powi(2);
+
+    if rad_term < 0.0 {
+        return 0.0;
     }
-    return sol
+
+    let sol = - (2.0 * d.powi(3) + l_term - rad_term.sqrt()) 
+        / (2.0 * d * (d + alpha * epsilon));
+
+    if sol.is_nan() || sol.is_sign_negative() {
+        return 0.0;
+    }
+
+    sol
 }
 
 
