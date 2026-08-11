@@ -1,0 +1,91 @@
+---
+title: "Example dynamics"
+output: 
+  html_document
+---
+R code used to generate Figure D8
+
+```{r, eval = F}
+.vsc.attach()
+setwd("R/gillespie_sim")
+```
+
+```{r imports}
+library(ggplot2)
+library(cowplot)
+library(khroma)
+
+config = "rust_config.json"
+
+source("utils.R")
+```
+
+## sigma = 0.01, N = 1e3, theta = 1e-3 
+```{r start}
+n = 3
+sigma = -2
+theta = -3
+desc <- paste0("N_E", n, "_sigma_E", sigma, "_theta_E", theta)
+result <- paste0("results/starts_", desc, ".csv")
+if (!file.exists(result)) {
+  writeConfig(
+    config,
+    desc,
+    replicates = 1,
+    rounds = 2e5,
+    write_every = 1,
+    seed = 93117,
+    pop_size = 10^n,
+    patch_lifetime = 10000,
+    mort_to_disp = 24.1225,
+    uniform_fraction = 0,
+    max_biomass = 121.012,
+    mut_prob = 10^theta,
+    mut_stdev = 10^sigma,
+    mut_range = c(0, 1),
+    initial = list(
+      list(alpha = 0.109, patches = 900)
+      )
+  )
+  command <- sprintf(
+    r"[cargo run --release --manifest-path rust/Cargo.toml -- %s %s]",
+    config, result
+  )
+  code <- system(command)
+}
+
+points <- read.csv(result, comment.char = "#")
+```
+
+
+```{r, fig.width = 6, fig.height = 6}
+tol = khroma::color("iridescent")
+every10rounds = subset(points, round %% 20 == 0)
+
+plt1 <- ggplot(every10rounds, aes(x = time, y = alpha, color = patch_count)) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "#555555") +
+  geom_hline(yintercept = 0.109, linetype = "dashed", color = "#555555") +
+  geom_point(size = 0.001, stroke = 0.5) +
+  labs(
+    x = "Simulation time",
+    y = "Siderophore investment α",
+    color = "Occupied patches"
+  ) +
+  scale_color_gradientn(colors = tol(23)[10:23],
+                        trans = "log",
+                        limits = c(1, 1000),
+                        breaks = c(1, 10, 100, 1000)) +
+  coord_cartesian( ylim = c(0, 0.11)) +
+  scale_x_continuous(expand = expansion(mult = c(0.05, 0))) +
+  theme_bw() +
+  theme(legend.position = "inside") +
+  theme(
+    aspect.ratio = 1, 
+    text = element_text(family = "sans"), 
+    legend.position.inside = c(0.7, 0.75),
+    legend.key.height  = unit(10, "pt"),
+    legend.background = element_blank()
+    )
+
+plt1
+```

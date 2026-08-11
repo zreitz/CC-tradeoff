@@ -1,0 +1,15 @@
+This directory contains the Rust source code used for the Gillespie-style stochastic simulation algorithm 
+
+See the [Rust documentation](https://www.rust-lang.org/learn/get-started) 
+for instructions to install Rust and Cargo on your system.
+
+
+Usage: 
+```
+cargo run --release --bin main -- PARAM_FILE
+```
+
+Parameters are set with a JSON file. A test file is provided. For example:
+```
+cargo run --release --bin main -- params.json
+```

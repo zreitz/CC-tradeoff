@@ -1,0 +1,13 @@
+This directory contains the Rust source code used for the patch-occupancy simulations. Three different sets of ODEs (`MODEL`s) are used: `siderophore`, `siderophoreQSS`, `lactamase`, and `invertase` (`siderophore` is the unreduced model, which is not used in the manuscript.)
+
+See the [Rust documentation](https://www.rust-lang.org/learn/get-started) for instructions to install Rust and Cargo on your system.
+
+Usage: 
+```
+cargo run --release --bin MODEL -- PARAM_FILE
+```
+
+Parameters are set with a JSON file. Test files are provided. For example:
+```
+cargo run --bin siderophore -- params_siderophore.json
+```

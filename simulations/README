@@ -1,0 +1,24 @@
+This directory contains the R and Rust source code used to run simulations and generate figures.
+
+Contents:
+
+R/patch_occupancy_sim/
+- rust/: simulation source code; see readme therein
+- figure3.rmd: Figure 3
+- lactamase.rmd: Figure 5D
+- invertase.rmd: Figure 5H
+- stats.rmd: Figure D2 and D3
+- sigma_sweep.rmd: Figure D4
+- mu_sweep.rmd: Figure D5
+
+
+R/gillespie_sim/
+- rust/: simulation source code; see readme therein
+- nomut.rmd: Figures D6 and D7
+- example.rmd: Figure D8
+- stats.rmd: Figure D9
+
+R/kick_flow_sim/
+- rust/: simulation source code; see readme therein
+- sweeps.rmd: Figures 4A and D10
+

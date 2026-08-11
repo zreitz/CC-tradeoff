@@ -1,19 +1,42 @@
-# Supplementary files for "Microbial public good production in spatially structured environments is supported by a competition-colonization trade-off"
-by Zachary L. Reitz (zlreitz@gmail.com), Holly V. Moeller, and Stephen R. Proulx
-
-
+# Supplementary files for "Microbial public goods dynamics create a competition-colonization trade-off that leads to the evolution of coexisting strategies"
 
 ## Contents
 
 ### mathematica/
-This directory contains Wolfram Mathematica notebooks used to perform mathematical analyses and generate Figures 2-4, 5C, 5D, 6B, 6C, 6E, 6F, S1-S5. See directory readme for more information.
+Wolfram Mathematica notebooks (compiled in version 14.0 on Windows 11).
 
-### r/
+Contents:
 
-This directory contains the R source code used for the niche-shadow-based metapopulation simulations (Figures 5, 6D, 6H, S4, S6, S7), the kick-flow simulation (Figure 7A), and the histograms of isolate data in Figure 7B, 7C. See directory readme for more information.
+- 1-in-patch-model.nb: In-patch model solution, Figure 1B-E
+- 2-metapopulation-model.nb: Figure 3, Figure S1, system solution for D6 and D7
+- AppendixB.nb: Analysis of the unreduced in-patch model
+- AppendixE.nb: Analysis of the lactamase model
+- AppendixF.nb: Analysis of the invertase model
 
-### rust/
-This directory contains the Rust source code used for the niche-shadow-based metapopulation simulations (Figures 5, 6D, 6H, S4, S6, S7). See directory readme for more information.
+### simulations/
+R and Rust source code used to run simulations and generate figures.
 
-### rust-ode/
-This directory contains the Rust source code used for the kick-flow simulations (Figure 7a). See directory readme for more information.
+Contents:
+
+R/patch_occupancy_sim/
+- rust/: simulation source code; see readme therein
+- figure3.rmd: Figure 3
+- lactamase.rmd: Figure 5D
+- invertase.rmd: Figure 5H
+- stats.rmd: Figure D2 and D3
+- sigma_sweep.rmd: Figure D4
+- mu_sweep.rmd: Figure D5
+
+
+R/gillespie_sim/
+- rust/: simulation source code; see readme therein
+- nomut.rmd: Figures D6 and D7
+- example.rmd: Figure D8
+- stats.rmd: Figure D9
+
+R/kick_flow_sim/
+- rust/: simulation source code; see readme therein
+- sweeps.rmd: Figures 4A and D10
+
+### isolate_comparison/
+R code used to generate Figure 5B and 5C.

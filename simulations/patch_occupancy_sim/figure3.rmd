@@ -1,0 +1,524 @@
+---
+title: "Figure 3 panels"
+output: 
+  html_document
+---
+R code used to generate Figure 3
+
+```{r, eval = F}
+.vsc.attach()
+setwd("R/patch_occupancy_sim")
+```
+
+```{r imports}
+library(ggplot2)
+library(cowplot)
+library(khroma)
+
+config = "rust_config.json"
+
+source("utils.R")
+```
+
+## Small kernel, visualizing initial decrease
+```{r start}
+desc <- "smallmut_0.001_allpoints"
+result <- paste0("results/", desc, ".json")
+if (!file.exists(result)) {
+  writeConfig(
+    config,
+    desc,
+    mortality = 24.1225,
+    mut_stdev = 0.001,
+    mut_uniform = 0.0,
+    write_every = 1,
+    rounds = 50000,
+    initial = 0.109
+  )
+  command <- sprintf(
+    r"[cargo run --release --bin siderophoreQSS --manifest-path rust/Cargo.toml -- %s %s]",
+    config, result
+  )
+  code <- system(command)
+}
+
+points <- read.csv(result, comment.char = "#")
+points <- points[-1,] # Time zero gets duplicated
+# Cut timesteps to get a reasonable number of points while capturing the beginning
+fewerpoints <- subset(points, time < 2000 | time %% 25 == 0)
+
+every10sec <- subset(points, time %% 10 == 0)
+```
+
+```{r, fig.width = 6, fig.height = 6}
+
+
+tol = khroma::color("iridescent")
+
+pltA <- ggplot(fewerpoints, aes(x = time, y = alpha, color = frequency)) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "#555555") +
+  geom_hline(yintercept = 0.109, linetype = "dashed", color = "#555555") +
+  geom_point(size = 0.001, stroke = 0.5) +
+  labs(
+    x = "Simulation time",
+    y = "Siderophore investment α",
+    color = "Patch\noccupancy\n"
+  ) +
+  scale_color_gradientn(colors = tol(23)[10:23],
+                        trans = "log",
+                        limits = c(0.0001, 1),
+                        breaks = c(0.0001, 0.001, 0.01, 0.1, 1),
+                        labels = c("0.0001", 0.001, 0.01, 0.1, 1)) +
+
+  coord_cartesian( ylim = c(0, 0.11)) +
+  scale_x_continuous(expand = expansion(mult = c(0.05, 0))) +
+  theme_bw(base_size = 14) +
+  theme(legend.position = "inside",
+        legend.position.inside = c(0.8, 0.6)) +
+  theme(aspect.ratio = 1, text = element_text(family = "sans"))
+
+pltA
+```
+
+
+## Higher kernel example
+
+```{r start}
+desc <- "smallmut_0.01"
+result <- paste0("results/", desc, ".json")
+if (!file.exists(result)) {
+  writeConfig(
+    config,
+    desc,
+    mortality = 24.1225,
+    mut_stdev = 0.01,
+    mut_uniform = 0.0,
+    write_every = 1,
+    rounds = 50000,
+    initial = 0.109
+  )
+  command <- sprintf(
+    r"[cargo run --release --bin siderophoreQSS --manifest-path rust/Cargo.toml -- %s %s]",
+    config, result
+  )
+  code <- system(command)
+}
+
+points <- read.csv(result, comment.char = "#")
+points <- points[-1,] # Time zero gets duplicated
+# Cut timesteps to get a reasonable number of points
+fewerpoints <- subset(points, time %% 2 == 0 & time < 5000)
+```
+
+```{r, fig.width = 6, fig.height = 6}
+
+
+tol = khroma::color("iridescent")
+
+pltB <- ggplot(fewerpoints, aes(x = time, y = alpha, color = frequency)) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "#555555") +
+  geom_hline(yintercept = 0.109, linetype = "dashed", color = "#555555") +
+  geom_point(size = 0.001, stroke = 0.5) +
+  labs(
+    x = "Simulation time",
+    y = "Siderophore investment α",
+    color = "Patch\noccupancy\n"
+  ) +
+  scale_color_gradientn(colors = tol(23)[10:23],
+                        trans = "log",
+                        limits = c(0.0001, 1),
+                        breaks = c(0.0001, 0.001, 0.01, 0.1, 1),
+                        labels = c("0.0001", 0.001, 0.01, 0.1, 1)) +
+
+  coord_cartesian(ylim = c(0, 0.11)) +
+  scale_x_continuous(expand = expansion(mult = c(0.05, 0))) +
+  theme_bw(base_size = 14) +
+  theme(legend.position = "none",
+        legend.position.inside = c(0.8, 0.7)) +
+  theme(aspect.ratio = 1, text = element_text(family = "sans"))
+
+pltB
+```
+
+
+## Higher mu
+
+
+```{r start}
+desc <- "smallmut_0.01_highermu"
+result <- paste0("results/", desc, ".json")
+if (!file.exists(result)) {
+  writeConfig(
+    config,
+    desc,
+    mortality = 24.1225 * 2,
+    mut_stdev = 0.01,
+    mut_uniform = 0.0,
+    write_every = 1,
+    rounds = 50000,
+    initial = 0.109
+  )
+  command <- sprintf(
+    r"[cargo run --release --bin siderophoreQSS --manifest-path rust/Cargo.toml -- %s %s]",
+    config, result
+  )
+  code <- system(command)
+}
+
+points <- read.csv(result, comment.char = "#")
+points <- points[-1,] # Time zero gets duplicated
+
+
+fewerpoints <- subset(points, time %% 2 == 0 & time < 5000)
+```
+
+```{r, fig.width = 6, fig.height = 6}
+
+
+tol = khroma::color("iridescent")
+
+pltF <- ggplot(fewerpoints, aes(x = time, y = alpha, color = frequency)) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "#555555") +
+  geom_hline(yintercept = 0.109, linetype = "dashed", color = "#555555") +
+  geom_point(size = 0.001, stroke = 0.5) +
+  labs(
+    x = "Simulation time",
+    y = "Siderophore investment α",
+    color = "Patch\noccupancy\n"
+  ) +
+  scale_color_gradientn(colors = tol(23)[10:23],
+                        trans = "log",
+                        limits = c(0.0001, 1),
+                        breaks = c(0.0001, 0.001, 0.01, 0.1, 1),
+                        labels = c("0.0001", 0.001, 0.01, 0.1, 1)) +
+
+  coord_cartesian(ylim = c(0, 0.11)) +
+  scale_x_continuous(expand = expansion(mult = c(0.05, 0))) +
+  theme_bw(base_size = 14) +
+  theme(legend.position = "none",
+        legend.position.inside = c(0.8, 0.7)) +
+  theme(aspect.ratio = 1, text = element_text(family = "sans"))
+
+pltF
+```
+
+
+
+## Lower mu
+
+
+```{r start}
+desc <- "smallmut_0.01_lowermu"
+result <- paste0("results/", desc, ".json")
+if (!file.exists(result)) {
+  writeConfig(
+    config,
+    desc,
+    mortality = 24.1225 / 2,
+    mut_stdev = 0.01,
+    mut_uniform = 0.0,
+    write_every = 1,
+    rounds = 50000,
+    initial = 0.109
+  )
+  command <- sprintf(
+    r"[cargo run --release --bin siderophoreQSS --manifest-path rust/Cargo.toml -- %s %s]",
+    config, result
+  )
+  code <- system(command)
+}
+
+points <- read.csv(result, comment.char = "#")
+points <- points[-1,] # Time zero gets duplicated
+
+
+
+fewerpoints <- subset(points, time %% 2 == 0 & time < 5000)
+```
+
+```{r, fig.width = 6, fig.height = 6}
+
+
+tol = khroma::color("iridescent")
+
+pltE <- ggplot(fewerpoints, aes(x = time, y = alpha, color = frequency)) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "#555555") +
+  geom_hline(yintercept = 0.109, linetype = "dashed", color = "#555555") +
+  geom_point(size = 0.001, stroke = 0.5) +
+  labs(
+    x = "Simulation time",
+    y = "Siderophore investment α",
+    color = "Patch\noccupancy\n"
+  ) +
+  scale_color_gradientn(colors = tol(23)[10:23],
+                        trans = "log",
+                        limits = c(0.0001, 1),
+                        breaks = c(0.0001, 0.001, 0.01, 0.1, 1),
+                        labels = c("0.0001", 0.001, 0.01, 0.1, 1)) +
+
+  coord_cartesian(ylim = c(0, 0.11)) +
+  scale_x_continuous(expand = expansion(mult = c(0.05, 0))) +
+  theme_bw(base_size = 14) +
+  theme(legend.position = "none",
+        legend.position.inside = c(0.8, 0.7)) +
+  theme(aspect.ratio = 1, text = element_text(family = "sans"))
+
+pltE
+```
+
+
+## Sigma sweep
+
+
+```{r start}
+values <- 10 ^ seq(from = -4, to = -1, by = 0.25)
+
+run_rust <- function(stdev) {
+  desc <- sprintf("stdev_%s", signif(stdev, 2))
+  result <- paste0("results/", desc, ".json")
+  if (!file.exists(result)) {
+    writeConfig(
+      config,
+      desc,
+      mortality = 24.1225,
+      mut_stdev = stdev,
+      mut_uniform = 0.0,
+      write_every = 10,
+      rounds = 1e6,
+      initial = 0.109
+    )
+    command <- sprintf(
+      r"[cargo run --release --bin siderophoreQSS --manifest-path rust/Cargo.toml -- %s %s]",
+      config, result
+    )
+    code <- system(command)
+  }
+  result
+}
+
+results <- Vectorize(run_rust)(values)
+```
+
+# Collect statistics
+```{r}
+productions <- vector("list", length(values))
+densities <- vector("list", length(values))
+
+for (i in seq_along(results)) {
+  # Load points, remove burn-in
+  points <- read.csv(results[[i]], comment.char = "#")
+  points <- subset(points, time > 100000)
+
+  # Compute values for each time point, then record five-number summaries
+  production <- aggregate(alpha * pressure ~ time, data = points, FUN = sum)
+  productions[[i]] <- fivenum(production[,2])
+
+  # Density plot
+  w <- points$pressure / sum(points$pressure)
+  
+  dens <- density(
+    x = points$alpha, 
+    weights = w, 
+    from = 0, 
+    to = 0.25,
+    bw = 0.002
+  )
+  densities[[i]] <- data.frame(
+    alpha = dens$x,
+    density = dens$y,
+    value = values[[i]]
+  )
+}
+```
+
+```{r}
+# main text figure
+df <- as.data.frame(do.call(rbind, productions))
+df <- df / (96.88921*0.109)   # Make relative to alpha_hat at equilibrium
+ylab = "Total siderophore production"
+df$stdev <- values
+
+pltD <- ggplot(df, aes(x = stdev, ymin = V1, lower = V2, middle = V3, upper = V4, ymax = V5, group = stdev)) +
+  geom_boxplot(stat = "identity") + 
+  labs(
+    x = "Mutation kernel size σ",
+    y = ylab
+  ) +
+  scale_x_log10() +
+  
+  scale_y_continuous(limits = c(0, 0.3)) +
+  theme_bw(base_size = 14) +
+  theme(aspect.ratio = 1)
+pltD
+```
+
+
+```{r}
+df <- as.data.frame(do.call(rbind, densities))
+df$value <- log10(df$value)
+
+pltC <- ggplot(df, aes(x = alpha, y = density, group = value, color = value)) +
+  geom_line(linewidth = 0.5) +
+  geom_vline(xintercept = 0.109, linetype = "dashed") +
+  theme_bw(base_size = 14) +
+  scale_color_YlOrBr(reverse = F, range = c(0.4, 1), labels = c("0.0001", "0.001", "0.01", "0.1")) +
+  labs(
+    x = "Siderophore investment α",
+    y = "Biomass density",
+    color = "Kernel σ"
+  ) +
+  coord_cartesian(xlim = c(0, 0.11)) +
+  theme(
+    aspect.ratio = 1,
+    legend.position = "inside", 
+    legend.position.inside = c(0.6, 0.7)
+    )
+
+pltC
+```
+
+
+
+## mu sweep
+
+
+```{r start}
+values <- seq(from = 0.2, to = 5, by = 0.4)
+
+run_rust <- function(mu) {
+  desc <- sprintf("mu_%s", signif(mu, 2))
+  result <- paste0("results/", desc, ".json")
+  if (!file.exists(result)) {
+    writeConfig(
+      config,
+      desc,
+      mortality = 24.1225 * mu,
+      mut_stdev = 0.1,
+      mut_uniform = 0.0,
+      write_every = 10,
+      rounds = 1e6,
+      initial = 0.109
+    )
+    command <- sprintf(
+      r"[cargo run --release --bin siderophoreQSS --manifest-path rust/Cargo.toml -- %s %s]",
+      config, result
+    )
+    code <- system(command)
+  }
+  result
+}
+
+results <- Vectorize(run_rust)(values)
+```
+
+# Collect statistics
+```{r}
+productions_mu <- vector("list", length(values))
+densities_mu <- vector("list", length(values))
+
+for (i in seq_along(results)) {
+  # Load points, remove burn-in
+  points <- read.csv(results[[i]], comment.char = "#")
+  points <- subset(points, time > 100000)
+
+  # Compute values for each time point, then record five-number summaries
+  production <- aggregate(alpha * pressure ~ time, data = points, FUN = sum)
+  productions_mu[[i]] <- fivenum(production[,2])
+
+  # Density plot
+  w <- points$pressure / sum(points$pressure)
+  
+  dens <- density(
+    x = points$alpha, 
+    weights = w, 
+    from = 0, 
+    to = 0.25,
+    bw = 0.002
+  )
+  densities_mu[[i]] <- data.frame(
+    alpha = dens$x,
+    density = dens$y,
+    value = values[[i]]
+  )
+}
+```
+
+
+
+```{r}
+df <- as.data.frame(do.call(rbind, densities_mu))
+df$isone <- df$value == 1
+
+pltG <- ggplot(df, aes(x = alpha, y = density, group = value, color = value, linewidth = isone)) +
+  geom_line() +
+  geom_vline(xintercept = 0.109, linetype = "dashed") +
+  theme_bw(base_size = 14) +
+  scale_color_YlOrBr(reverse = F, range = c(0.4, 1)) +
+  scale_linewidth_manual(values = c(0.5, 1.5)) +
+  labs(
+    x = "Siderophore investment α",
+    y = "Biomass density",
+    color = "μ/δ(0)"
+  ) +
+  coord_cartesian(xlim = c(0, 0.11)) +
+  guides(linewidth = "none") +
+  theme(
+    aspect.ratio = 1,
+    legend.position = "inside", 
+    legend.position.inside = c(0.6, 0.7)
+    )
+
+pltG
+```
+
+
+
+```{r}
+df <- as.data.frame(do.call(rbind, productions_mu))
+df <- df / (96.88921*0.109)   # Make relative to alpha_hat at equilibrium
+ylab = "Total siderophore production"
+df$stdev <- values
+
+pltH <- ggplot(df, aes(x = stdev, ymin = V1, lower = V2, middle = V3, upper = V4, ymax = V5, group = stdev)) +
+  geom_boxplot(stat = "identity") + 
+  labs(
+    x = "Mortality rate μ/δ(0)",
+    y = ylab
+  ) +
+  scale_y_continuous(limits = c(0, 0.3)) +
+  theme_bw(base_size = 14) +
+  theme(aspect.ratio = 1)
+pltH
+```
+
+
+## Assemble figure
+```{r}
+plot_list <- list(pltA, pltB, pltC, pltD, pltE, pltF, pltG, pltH)
+
+plot <- plot_grid( # cowplot
+  plotlist = plot_list,
+  ncol = 4,
+  nrow = 2,
+  align = "hv",
+  labels = c("A", "B", "C", "D", "E", "F", "G", "H"),
+  label_size = 16,
+  label_fontface = "bold",
+  label_fontfamily = "sans"
+)
+
+save_plot(
+  filename = "results/figure3.png", 
+  plot = plot,
+  base_height = 8,
+  base_width = 16, 
+  dpi = 150,
+)
+save_plot(
+  filename = "results/figure3.svg", 
+  plot = plot,
+  base_height = 8,
+  base_width = 16, 
+  dpi = 150,
+)
+```

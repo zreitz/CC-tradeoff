@@ -1,0 +1,18 @@
+This directory contains the Rust source code used for the kick-flow simulations.
+
+See the [Rust documentation](https://www.rust-lang.org/learn/get-started) 
+for instructions to install Rust and Cargo on your system.
+
+In addition to the `main` binary, there is also the `no-ode.rs`, which uses the analytical equilibrium rather than the numerical ODE solver (generates the black line in Figure 4A and D10).
+
+Usage: 
+```
+cargo run --release --bin main -- PARAM_FILE
+cargo run --release --bin no-ode -- PARAM_FILE
+```
+
+Parameters are set with a JSON file. A test file is provided. For example:
+```
+cargo run --release --bin main -- params.json
+```
+
