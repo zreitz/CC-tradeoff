@@ -18,7 +18,7 @@ R and Rust source code used to run simulations and generate figures.
 
 Contents:
 
-R/patch_occupancy_sim/
+simulations/patch_occupancy_sim/
 - rust/: simulation source code; see readme therein
 - figure3.rmd: Figure 3
 - lactamase.rmd: Figure 5D
@@ -28,13 +28,13 @@ R/patch_occupancy_sim/
 - mu_sweep.rmd: Figure D5
 
 
-R/gillespie_sim/
+simulations/gillespie_sim/
 - rust/: simulation source code; see readme therein
 - nomut.rmd: Figures D6 and D7
 - example.rmd: Figure D8
 - stats.rmd: Figure D9
 
-R/kick_flow_sim/
+simulations/kick_flow_sim/
 - rust/: simulation source code; see readme therein
 - sweeps.rmd: Figures 4A and D10
 
